@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:tensor/src/transformers/clip_text/clip_config.dart';
+import 'package:kamma/kamma.dart';
 import 'package:universal_io/io.dart';
 
 abstract class Tokenizer {

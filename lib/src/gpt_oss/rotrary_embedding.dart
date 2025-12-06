@@ -4,21 +4,33 @@ import 'package:tensor/tensor.dart';
 
 class RotaryEmbedding extends Module {
   final double base;
-  final Tensor cosCached;
-  final Tensor sinCached;
+  final Tensor invFreq;
 
   RotaryEmbedding({
+    required super.name,
     this.base = 10000.0,
-    required this.cosCached,
-    required this.sinCached,
-  }) : assert(cosCached.shape[1] == sinCached.shape[1]),
-       assert(cosCached.shape[0] == sinCached.shape[0]);
+    required this.invFreq,
+  });
 
   factory RotaryEmbedding.make({
+    required String name,
     double base = 10000.0,
     required int dim,
     required int maxPositionEmbeddings,
   }) {
+    final invFreq = Tensor.empty([dim], datatype: DataType.float32);
+    return RotaryEmbedding(name: name, base: base, invFreq: invFreq);
+  }
+
+  int get dim => cosCached.shape[1];
+
+  int get maxPositionEmbeddings => cosCached.shape[0];
+
+  ({Tensor cos, Tensor sin}) encode(
+    Tensor positionIds, {
+    required Context context,
+  }) {
+    /*
     final cosCached = Tensor.empty([
       maxPositionEmbeddings,
       dim,
@@ -27,18 +39,8 @@ class RotaryEmbedding extends Module {
       maxPositionEmbeddings,
       dim,
     ], datatype: DataType.float32);
-    return RotaryEmbedding(
-      base: base,
-      cosCached: cosCached,
-      sinCached: sinCached,
-    )..populate();
-  }
+    */
 
-  int get dim => cosCached.shape[1];
-
-  int get maxPositionEmbeddings => cosCached.shape[0];
-
-  void populate() {
     // Generate cos/sin cache
     // inv_freq = 1.0 / (base ** (arange(0, dim, 2).float() / dim))
     final invFreqList = <double>[];
@@ -177,4 +179,38 @@ class RotaryEmbedding extends Module {
 
   @override
   final Iterable<Module> submodules = const [];
+}
+
+abstract class RoPEInvFreq {
+  String get name;
+
+  ({Tensor invFreq, double attentionFactor}) perform(double theta);
+
+  const RoPEInvFreq();
+}
+
+/// Computes the inverse frequencies according to the original RoPE implementation
+class RoPEInvFreqDefault implements RoPEInvFreq {
+  @override
+  final String name = 'default';
+
+  @override
+  ({Tensor invFreq, double attentionFactor}) perform(
+    double theta,
+    int numHeads,
+  ) {
+    Tensor.arange();
+    /*
+    final invFreqList = <double>[];
+    for (int i = 0; i < dim; i += 2) {
+      invFreqList.add(1.0 / pow(base, i / dim));
+    }
+    */
+    // TODO
+    Tensor invFreq;
+
+    return (invFreq: invFreq, attentionFactor: 1.0);
+  }
+
+  const RoPEInvFreqDefault._();
 }

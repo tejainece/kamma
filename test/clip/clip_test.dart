@@ -1,4 +1,4 @@
-import 'package:tensor/tensor.dart';
+import 'package:kamma/kamma.dart';
 import 'package:test/test.dart';
 
 class _EncodeTokenTest {

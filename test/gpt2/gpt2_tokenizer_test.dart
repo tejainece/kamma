@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:tensor/tensor.dart';
+import 'package:kamma/kamma.dart';
 import 'package:test/test.dart';
 
 void main() {

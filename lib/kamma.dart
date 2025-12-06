@@ -1,3 +1,5 @@
+export 'package:tensor/tensor.dart';
+
 export 'src/clip_text/clip_text.dart';
 export 'src/clip_vision/clip_vision.dart';
 export 'src/gpt2/gpt2.dart';

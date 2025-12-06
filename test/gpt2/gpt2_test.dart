@@ -1,5 +1,5 @@
+import 'package:kamma/kamma.dart';
 import 'package:test/test.dart';
-import 'package:tensor/tensor.dart';
 
 void main() {
   test('GPT2LMHeadModel forward pass', () {
@@ -24,6 +24,7 @@ void main() {
 
     // Create dummy position ids
     final positionIds = Tensor.arange(
+      0,
       10,
       datatype: DataType.int64,
     ).unsqueeze(0).expand([batchSize, seqLength]);

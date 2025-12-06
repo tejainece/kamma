@@ -1,5 +1,5 @@
 import 'dart:math';
-import 'package:tensor/tensor.dart';
+import 'package:kamma/kamma.dart';
 
 class GPT2Attention extends Module {
   final int embedDim;

@@ -1,5 +1,5 @@
 import 'dart:math';
-import 'package:tensor/tensor.dart';
+import 'package:kamma/kamma.dart';
 
 /// Multi-head self-attention with cosine QK normalization for S3-DiT
 class S3DiTAttention extends Module implements SimpleModule {

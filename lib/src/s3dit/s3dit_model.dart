@@ -1,6 +1,4 @@
-import 'package:tensor/tensor.dart';
-import 'package:tensor/src/transformers/s3dit/s3dit_config.dart';
-import 'package:tensor/src/transformers/s3dit/s3dit_block.dart';
+import 'package:kamma/kamma.dart';
 
 /// S3-DiT (Scalable Single-Stream Diffusion Transformer) Model
 ///

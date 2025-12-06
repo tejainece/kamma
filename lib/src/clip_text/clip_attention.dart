@@ -1,4 +1,4 @@
-import 'package:tensor/tensor.dart';
+import 'package:kamma/kamma.dart';
 
 /// Multi-headed attention from 'Attention Is All You Need' paper
 class ClipAttention extends Module {

@@ -1,7 +1,4 @@
-import 'package:tensor/tensor.dart';
-import 'package:tensor/src/transformers/s3dit/s3dit_config.dart';
-import 'package:tensor/src/transformers/s3dit/s3dit_attention.dart';
-import 'package:tensor/src/transformers/s3dit/s3dit_mlp.dart';
+import 'package:kamma/kamma.dart';
 
 /// Single S3-DiT transformer block with sandwich-style RMSNorm
 ///

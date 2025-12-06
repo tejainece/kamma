@@ -1,4 +1,4 @@
-import 'package:tensor/tensor.dart';
+import 'package:kamma/kamma.dart';
 
 class GptOssForCausalLM extends Module implements SimpleModule {
   final GptOssModel transformer;

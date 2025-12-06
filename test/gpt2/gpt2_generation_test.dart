@@ -1,5 +1,5 @@
+import 'package:kamma/kamma.dart';
 import 'package:test/test.dart';
-import 'package:tensor/tensor.dart';
 
 // Simple mock tokenizer for testing
 class MockTokenizer {

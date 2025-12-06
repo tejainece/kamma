@@ -1,4 +1,4 @@
-import 'package:tensor/tensor.dart';
+import 'package:kamma/kamma.dart';
 
 void main() async {
   final prompt = 'minimalistic symmetrical logo with moose head';

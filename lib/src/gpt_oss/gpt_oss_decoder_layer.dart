@@ -1,4 +1,4 @@
-import 'package:tensor/tensor.dart';
+import 'package:kamma/kamma.dart';
 
 /// TODO GradientCheckpointingLayer
 class GptOssDecoderLayer extends Module implements SimpleModule {

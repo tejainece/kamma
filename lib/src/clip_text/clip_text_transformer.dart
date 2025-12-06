@@ -1,5 +1,6 @@
-import 'package:tensor/tensor.dart';
-import 'package:tensor/src/diffusion/sd/stable_diffusion.dart';
+import 'package:kamma/kamma.dart';
+
+abstract class TextEncoder {}
 
 class ClipTextTransformer extends Module implements TextEncoder {
   final ClipTextEmbeddings embeddings;
@@ -29,6 +30,7 @@ class ClipTextTransformer extends Module implements TextEncoder {
       inputEmbeds: hiddenStates,
       attentionMask: attentionMask,
       cachePosition: Tensor.arange(
+        0,
         hiddenStates.shape[1],
         device: hiddenStates.device,
       ),
@@ -416,8 +418,9 @@ class ClipTextEmbeddings extends Module implements SimpleModule {
       prefix: '$prefix$positionEmbeddingName.',
     );
     final Tensor positionIds = Tensor.arange(
-      name: positionIdsName,
+      0,
       positionEmbedding.numEmbeddings,
+      name: positionIdsName,
     ).expand([1, -1]);
 
     return ClipTextEmbeddings(

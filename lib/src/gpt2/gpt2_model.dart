@@ -1,4 +1,4 @@
-import 'package:tensor/tensor.dart';
+import 'package:kamma/kamma.dart';
 
 class GPT2Model extends Module {
   final int embedDim;
@@ -51,6 +51,7 @@ class GPT2Model extends Module {
 
       // Create position ids [0, 1, ..., seqLength - 1]
       positionIds = Tensor.arange(
+        0,
         seqLength,
         datatype: DataType.int64,
         device: inputIds.device,

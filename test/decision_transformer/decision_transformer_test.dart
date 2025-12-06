@@ -1,6 +1,5 @@
-import 'package:tensor/tensor.dart';
-import 'package:tensor/src/transformers/decision_transformer/decision_transformer_config.dart';
-import 'package:tensor/src/transformers/decision_transformer/decision_transformer_model.dart';
+import 'package:kamma/kamma.dart';
+import 'package:kamma/src/decision_transformer/decision_transformer_config.dart';
 import 'package:test/test.dart';
 
 void main() {

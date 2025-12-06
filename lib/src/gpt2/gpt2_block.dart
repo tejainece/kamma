@@ -1,4 +1,4 @@
-import 'package:tensor/tensor.dart';
+import 'package:kamma/kamma.dart';
 
 class GPT2Block extends Module implements SimpleModule {
   final LayerNorm ln1;

@@ -1,5 +1,4 @@
-import 'package:tensor/tensor.dart';
-import 'package:tensor/src/transformers/gpt_oss/gpt_oss.dart';
+import 'package:kamma/kamma.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -62,14 +61,16 @@ void main() {
 
   group('GptOssAttention', () {
     test('forward pass shape (with GQA and RoPE)', () {
-      final config = GptOssConfig(
-        nEmbd: 32,
-        nHead: 4,
-        numKeyValueHeads: 2, // GQA: 4 query heads, 2 kv heads
+      final attn = GptOssAttention.make(
+        name: 'attn',
+        embedDim: 32,
+        numHeads: 4,
         nPositions: 20,
+        numKeyValueHeads: 2,
         ropeTheta: 10000.0,
+        residDropoutP: 0.0,
+        attentionDropoutP: 0.0,
       );
-      final attn = GptOssAttention.make(config: config, name: 'attn');
       final input = Tensor.randn([2, 5, 32]);
       final output = attn.forward(input, context: context);
       expect(output.shape, [2, 5, 32]);

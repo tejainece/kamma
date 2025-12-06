@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:tensor/tensor.dart';
+import 'package:kamma/kamma.dart';
 
 void main(List<String> args) async {
   // 1. Setup paths

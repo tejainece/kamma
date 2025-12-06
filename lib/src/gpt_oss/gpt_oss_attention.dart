@@ -1,6 +1,5 @@
 import 'dart:math';
-import 'package:tensor/tensor.dart';
-import 'package:tensor/src/transformers/gpt_oss/rotrary_embedding.dart';
+import 'package:kamma/kamma.dart';
 
 class GptOssAttention extends Module {
   final int embedDim;
@@ -251,8 +250,8 @@ class GptOssAttention extends Module {
   static GptOssAttention make({
     required String name,
     bool isCrossAttention = false,
-    required int nEmbed,
-    required int nHead,
+    required int embedDim,
+    required int numHeads,
     required int nPositions,
     required int? numKeyValueHeads,
     required double ropeTheta,
@@ -260,34 +259,34 @@ class GptOssAttention extends Module {
     required double residDropoutP,
     int layerIdx = 0,
   }) {
-    final headDim = nEmbed ~/ nHead;
-    numKeyValueHeads = numKeyValueHeads ?? nHead;
+    final headDim = embedDim ~/ numHeads;
+    numKeyValueHeads = numKeyValueHeads ?? numHeads;
 
     final qProj = LinearLayer.make(
       name: '$name.q_proj',
-      inFeatures: nEmbed,
-      outFeatures: nHead * headDim,
+      inFeatures: embedDim,
+      outFeatures: numHeads * headDim,
       hasBias: false,
     );
 
     final kProj = LinearLayer.make(
       name: '$name.k_proj',
-      inFeatures: nEmbed,
+      inFeatures: embedDim,
       outFeatures: numKeyValueHeads * headDim,
       hasBias: false,
     );
 
     final vProj = LinearLayer.make(
       name: '$name.v_proj',
-      inFeatures: nEmbed,
+      inFeatures: embedDim,
       outFeatures: numKeyValueHeads * headDim,
       hasBias: false,
     );
 
     final oProj = LinearLayer.make(
       name: '$name.o_proj',
-      inFeatures: nHead * headDim,
-      outFeatures: nEmbed,
+      inFeatures: numHeads * headDim,
+      outFeatures: embedDim,
       hasBias: false,
     );
 
@@ -312,8 +311,8 @@ class GptOssAttention extends Module {
       rotaryEmb: rotaryEmb,
       attnDropout: attnDropout,
       residDropout: residDropout,
-      embedDim: nEmbed,
-      numHeads: nHead,
+      embedDim: embedDim,
+      numHeads: numHeads,
       numKeyValueHeads: numKeyValueHeads,
     );
   }

@@ -1,4 +1,4 @@
-import 'package:tensor/tensor.dart';
+import 'package:kamma/kamma.dart';
 
 /// Feed-forward network (MLP) for S3-DiT
 ///
