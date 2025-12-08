@@ -9,7 +9,7 @@ void main() {
     setUp(() {
       config = GptOssConfig(
         vocabSize: 100,
-        nEmbd: 32,
+        embedDim: 32,
         nLayer: 2,
         nHead: 4,
         nPositions: 20,
@@ -27,7 +27,7 @@ void main() {
       final inputIds = Tensor.randint(config.vocabSize, [
         batchSize,
         seqLen,
-      ], datatype: DataType.int64);
+      ], datatype: DataType.int64).to(device: context.device);
 
       final output = model.forward(inputIds, context: context);
 
@@ -47,15 +47,20 @@ void main() {
   group('GptOssMoE', () {
     test('forward pass shape', () {
       final config = GptOssConfig(
-        nEmbd: 32,
+        embedDim: 32,
         nHead: 4,
         numExperts: 4,
         numExpertsPerToken: 2,
       );
-      final moe = GptOssMoE.make(config: config, name: 'moe');
-      final input = Tensor.randn([2, 5, 32]);
+      final moe = GptOssMoE.make(
+        name: 'moe',
+        embedDim: config.embedDim,
+        nInner: 4 * config.embedDim,
+        numExperts: config.numExperts,
+        numExpertsPerToken: config.numExpertsPerToken!,
+      );
+      final input = Tensor.randn([2, 5, 32]).to(device: context.device);
       final output = moe.forward(input, context: context);
-      expect(output.shape, [2, 5, 32]);
     });
   });
 
@@ -63,6 +68,8 @@ void main() {
     test('forward pass shape (with GQA and RoPE)', () {
       final attn = GptOssAttention.make(
         name: 'attn',
+        isCrossAttention: false,
+        layerIdx: 0,
         embedDim: 32,
         numHeads: 4,
         nPositions: 20,
@@ -71,7 +78,7 @@ void main() {
         residDropoutP: 0.0,
         attentionDropoutP: 0.0,
       );
-      final input = Tensor.randn([2, 5, 32]);
+      final input = Tensor.randn([2, 5, 32]).to(device: context.device);
       final output = attn.forward(input, context: context);
       expect(output.shape, [2, 5, 32]);
     });

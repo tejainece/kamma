@@ -232,11 +232,27 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
     required GPT2Config config,
     required String name,
   }) {
-    final transformer = GPT2Model.make(config: config, name: 'transformer');
+    final transformer = GPT2Model.make(
+      name: 'transformer',
+      vocabSize: config.vocabSize,
+      nPositions: config.nPositions,
+      embedDim: config.embedDim,
+      nLayer: config.nLayer,
+      numHeads: config.nHead,
+      embedDropoutProbability: config.embdPdrop,
+      attentionDropoutProbability: config.attnPdrop,
+      residualDropoutProbability: config.residPdrop,
+      layerNormEpsilon: config.layerNormEpsilon,
+      isCrossAttention: false, // Default for now
+      scaleAttnWeights: config.scaleAttnWeights,
+      scaleAttnByInverseLayerIdx: config.scaleAttnByInverseLayerIdx,
+      reorderAndUpcastAttn: config.reorderAndUpcastAttn,
+      nInner: config.nInner,
+    );
 
     final lmHead = LinearLayer.make(
       name: 'lm_head',
-      inFeatures: config.nEmbd,
+      inFeatures: config.embedDim,
       outFeatures: config.vocabSize,
       hasBias: false,
     );
@@ -260,18 +276,45 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
     );
   }
 
-  Future<void> loadFromSafeTensor(String path) async {
-    final file = await SafeTensorsFile.load(path);
-    final loader = file.cpuLoader();
+  static Future<GPT2LMHeadModel> loadFromSafeTensor(
+    SafeTensorLoader loader, {
+    required String prefix,
+    required String name,
+    required double embedDropoutProbability,
+    required double attentionDropoutProbability,
+    required double residualDropoutProbability,
+    required double layerNormEpsilon,
+    required int numHeads,
+    required bool scaleAttnWeights,
+    required bool scaleAttnByInverseLayerIdx,
+    required bool reorderAndUpcastAttn,
+    String lmHeadName = 'lm_f.',
+    String transformerName = '',
+  }) async {
+    final transformer = await GPT2Model.loadFromSafeTensor(
+      loader,
+      prefix: Module.combineDirs(prefix, transformerName),
+      name: name,
+      embedDropoutProbability: embedDropoutProbability,
+      attentionDropoutProbability: attentionDropoutProbability,
+      residualDropoutProbability: residualDropoutProbability,
+      layerNormEpsilon: layerNormEpsilon,
+      numHeads: numHeads,
+      scaleAttnWeights: scaleAttnWeights,
+      scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
+      reorderAndUpcastAttn: reorderAndUpcastAttn,
+    );
 
-    // Load transformer weights
-    await transformer.loadFromSafeTensor(loader);
+    final lmHead = await LinearLayer.loadFromSafeTensor(
+      loader,
+      prefix: '$prefix$lmHeadName.',
+      name: lmHeadName,
+    );
 
-    // Load LM head weights
-    try {
-      await lmHead.loadFromSafeTensor(loader, prefix: 'lm_head.');
-    } catch (e) {
-      print('Warning: Could not load lm_head weights: $e');
-    }
+    return GPT2LMHeadModel(
+      name: name,
+      transformer: transformer,
+      lmHead: lmHead,
+    );
   }
 }

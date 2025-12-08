@@ -128,7 +128,7 @@ class GptOssForCausalLM extends Module implements SimpleModule {
 
     final lmHead = LinearLayer.make(
       name: 'lm_head',
-      inFeatures: config.nEmbd,
+      inFeatures: config.embedDim,
       outFeatures: config.vocabSize,
       hasBias: false,
     );
@@ -140,19 +140,30 @@ class GptOssForCausalLM extends Module implements SimpleModule {
     );
   }
 
-  Future<void> loadFromSafeTensor(String path) async {
-    final file = await SafeTensorsFile.load(path);
-    final loader = file.cpuLoader();
+  static Future<GptOssForCausalLM> loadFromSafeTensor(
+    SafeTensorLoader loader, {
+    String name = '',
+    String transformerName = 'model',
+    String lmHeadName = 'lm_head',
+    required GptOssConfig config,
+  }) async {
+    final transformer = await GptOssModel.loadFromSafeTensor(
+      loader,
+      name: transformerName,
+      prefix: '$transformerName.',
+      config: config,
+    );
 
-    await transformer.loadFromSafeTensor(loader);
+    final lmHead = await LinearLayer.loadFromSafeTensor(
+      loader,
+      name: lmHeadName,
+      prefix: '$lmHeadName.',
+    );
 
-    // Load structure: usually 'lm_head.weight'. If missing, check if it should be tied with 'model.embed_tokens.weight' (wte)
-    if (loader.hasTensor('lm_head.weight')) {
-      await lmHead.loadFromSafeTensor(loader, prefix: 'lm_head.');
-    } else {
-      // Tie weights: copy wte weights to lm_head weight
-      // transformer.wte.weights is already loaded
-      lmHead.weight.copy_(transformer.wte.weights);
-    }
+    return GptOssForCausalLM(
+      name: name,
+      transformer: transformer,
+      lmHead: lmHead,
+    );
   }
 }

@@ -93,7 +93,7 @@ class DecisionTransformerModel extends Module {
     stackedInputs = stackedInputs.reshape([
       batchSize,
       3 * seqLen,
-      config.nEmbd,
+      config.embedDim,
     ]);
 
     var hiddenStates = drop.forward(stackedInputs, context: context);
@@ -126,7 +126,12 @@ class DecisionTransformerModel extends Module {
 
     // We need to unstack the hidden states to get predictions
     // (batch, 3 * seq_len, hidden_size) -> (batch, seq_len, 3, hidden_size)
-    hiddenStates = hiddenStates.reshape([batchSize, seqLen, 3, config.nEmbd]);
+    hiddenStates = hiddenStates.reshape([
+      batchSize,
+      seqLen,
+      3,
+      config.embedDim,
+    ]);
     // Permute back to (batch, 3, seq_len, hidden_size) if needed, or just slice
     // R_t is at index 0, s_t at 1, a_t at 2
 
@@ -240,23 +245,23 @@ class DecisionTransformerModel extends Module {
     required String name,
   }) {
     final embedTime = EmbeddingLayer.make(
-      config.maxEpLen,
-      config.nEmbd,
+      numEmbeddings: config.maxEpLen,
+      embedDim: config.embedDim,
       name: 'embed_time',
     );
     final embedState = LinearLayer.make(
       inFeatures: config.stateDim,
-      outFeatures: config.nEmbd,
+      outFeatures: config.embedDim,
       name: 'embed_state',
     );
     final embedAction = LinearLayer.make(
       inFeatures: config.actDim,
-      outFeatures: config.nEmbd,
+      outFeatures: config.embedDim,
       name: 'embed_action',
     );
     final embedReturn = LinearLayer.make(
       inFeatures: 1,
-      outFeatures: config.nEmbd,
+      outFeatures: config.embedDim,
       name: 'embed_return',
     );
 
@@ -264,29 +269,44 @@ class DecisionTransformerModel extends Module {
 
     final h = <GPT2Block>[];
     for (int i = 0; i < config.nLayer; i++) {
-      h.add(GPT2Block.make(config: config, name: 'h.$i', layerIdx: i));
+      h.add(
+        GPT2Block.make(
+          name: 'h.$i',
+          layerIdx: i,
+          embedDim: config.embedDim,
+          numHeads: config.nHead,
+          layerNormEpsilon: config.layerNormEpsilon,
+          attentionDropoutProbability: config.attnPdrop,
+          residualDropoutProbability: config.residPdrop,
+          isCrossAttention: false,
+          scaleAttnWeights: config.scaleAttnWeights,
+          scaleAttnByInverseLayerIdx: config.scaleAttnByInverseLayerIdx,
+          reorderAndUpcastAttn: config.reorderAndUpcastAttn,
+          nInner: config.nInner,
+        ),
+      );
     }
 
     final lnF = LayerNorm.make(
       name: 'ln_f',
-      normalizedShape: [config.nEmbd],
+      normalizedShape: [config.embedDim],
       eps: config.layerNormEpsilon,
     );
 
     final predictState = LinearLayer.make(
-      inFeatures: config.nEmbd,
+      inFeatures: config.embedDim,
       outFeatures: config.stateDim,
       name: 'predict_state',
     );
     final predictAction = LinearLayer.make(
-      inFeatures: config.nEmbd,
+      inFeatures: config.embedDim,
       outFeatures: config.actDim,
       name: 'predict_action',
       hasBias:
           false, // Usually tanh is applied after? Or just linear? HF uses tanh on action output sometimes.
     );
     final predictReturn = LinearLayer.make(
-      inFeatures: config.nEmbd,
+      inFeatures: config.embedDim,
       outFeatures: 1,
       name: 'predict_return',
     );

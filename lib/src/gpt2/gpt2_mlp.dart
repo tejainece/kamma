@@ -1,7 +1,6 @@
 import 'package:kamma/kamma.dart';
 
-class GPT2MLP extends Module {
-  final int embedDim;
+class GPT2MLP extends Module implements SimpleModule {
   final LinearLayer cFc;
   final LinearLayer cProj;
   final Activation act;
@@ -9,7 +8,6 @@ class GPT2MLP extends Module {
 
   GPT2MLP({
     required super.name,
-    required this.embedDim,
     required this.cFc,
     required this.cProj,
     required this.act,
@@ -28,6 +26,8 @@ class GPT2MLP extends Module {
     return hiddenStates;
   }
 
+  int get embedDim => cFc.inFeatures;
+
   @override
   void resetParameters() {
     cFc.resetParameters();
@@ -35,10 +35,7 @@ class GPT2MLP extends Module {
   }
 
   @override
-  late final Iterable<Tensor> parameters = [
-    ...cFc.parameters,
-    ...cProj.parameters,
-  ];
+  late final Iterable<Tensor> parameters = [];
 
   @override
   Map<String, dynamic> get meta => {"embedDim": embedDim};
@@ -46,9 +43,13 @@ class GPT2MLP extends Module {
   @override
   late final Iterable<Module> submodules = [cFc, cProj, dropout];
 
-  static GPT2MLP make({required GPT2Config config, required String name}) {
-    final embedDim = config.nEmbd;
-    final innerDim = config.nInner > 0 ? config.nInner : 4 * embedDim;
+  static GPT2MLP make({
+    required String name,
+    required int embedDim,
+    required int nInner,
+    required double residualDropoutProbability,
+  }) {
+    final innerDim = nInner > 0 ? nInner : 4 * embedDim;
 
     final cFc = LinearLayer.make(
       name: 'c_fc',
@@ -62,43 +63,47 @@ class GPT2MLP extends Module {
       outFeatures: embedDim,
     );
 
-    // TODO: Handle different activation functions from config if needed
     // For now defaulting to GELU as per standard GPT-2
-    const act = Activation.gelu;
-    final dropout = Dropout(config.residPdrop);
+    final dropout = Dropout(residualDropoutProbability);
 
     return GPT2MLP(
       name: name,
-      embedDim: embedDim,
       cFc: cFc,
       cProj: cProj,
-      act: act,
+      act: _makeActivation(),
       dropout: dropout,
     );
   }
 
-  Future<void> loadFromSafeTensor(
+  static Activation _makeActivation() {
+    // TODO: Handle different activation functions from config if needed
+    return Activation.gelu;
+  }
+
+  static Future<GPT2MLP> loadFromSafeTensor(
     SafeTensorLoader loader, {
     required String prefix,
+    required String name,
+    required double residualDropoutProbability,
   }) async {
-    // Load c_fc
-    if (loader.hasTensor('${prefix}c_fc.weight')) {
-      final weight = await loader.loadByName('${prefix}c_fc.weight');
-      cFc.weight.copy_(weight.transpose(0, 1));
-    }
-    if (loader.hasTensor('${prefix}c_fc.bias')) {
-      final bias = await loader.loadByName('${prefix}c_fc.bias');
-      cFc.bias!.copy_(bias);
-    }
+    final cFc = await LinearLayer.loadFromSafeTensor(
+      loader,
+      prefix: '${prefix}c_fc.',
+    );
 
-    // Load c_proj
-    if (loader.hasTensor('${prefix}c_proj.weight')) {
-      final weight = await loader.loadByName('${prefix}c_proj.weight');
-      cProj.weight.copy_(weight.transpose(0, 1));
-    }
-    if (loader.hasTensor('${prefix}c_proj.bias')) {
-      final bias = await loader.loadByName('${prefix}c_proj.bias');
-      cProj.bias!.copy_(bias);
-    }
+    final cProj = await LinearLayer.loadFromSafeTensor(
+      loader,
+      prefix: '${prefix}c_proj.',
+    );
+
+    final dropout = Dropout(residualDropoutProbability);
+
+    return GPT2MLP(
+      name: name,
+      cFc: cFc,
+      cProj: cProj,
+      act: _makeActivation(),
+      dropout: dropout,
+    );
   }
 }

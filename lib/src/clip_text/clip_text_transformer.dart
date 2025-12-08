@@ -323,11 +323,11 @@ class ClipMlp extends Module implements SimpleModule {
     String prefix = '',
     required String name,
   }) async {
-    final linear1 = await LinearLayer.loadFromSafeTensorStatic(
+    final linear1 = await LinearLayer.loadFromSafeTensor(
       loader,
       prefix: '${prefix}fc1.',
     );
-    final linear2 = await LinearLayer.loadFromSafeTensorStatic(
+    final linear2 = await LinearLayer.loadFromSafeTensor(
       loader,
       prefix: '${prefix}fc2.',
     );
@@ -407,12 +407,12 @@ class ClipTextEmbeddings extends Module implements SimpleModule {
     final String positionIdsName = 'position_ids',
   }) async {
     // final tokenEmbedding = loader.loadByName(prefix + 'token_embedding.weight');
-    final tokenEmbedding = await EmbeddingLayer.loadFromSafeTensorStatic(
+    final tokenEmbedding = await EmbeddingLayer.loadFromSafeTensor(
       loader,
       name: tokenEmbeddingName,
       prefix: '$prefix$tokenEmbeddingName.',
     );
-    final positionEmbedding = await EmbeddingLayer.loadFromSafeTensorStatic(
+    final positionEmbedding = await EmbeddingLayer.loadFromSafeTensor(
       loader,
       name: positionEmbeddingName,
       prefix: '$prefix$positionEmbeddingName.',

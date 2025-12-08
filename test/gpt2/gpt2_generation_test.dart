@@ -56,7 +56,7 @@ void main() {
       final config = GPT2Config(
         vocabSize: words.length,
         nPositions: 20,
-        nEmbd: 32,
+        embedDim: 32,
         nLayer: 2,
         nHead: 4,
       );

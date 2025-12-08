@@ -12,7 +12,7 @@ void main() {
         stateDim: 17,
         actDim: 4,
         maxEpLen: 100,
-        nEmbd: 32,
+        embedDim: 32,
         nLayer: 2,
         nHead: 4,
         vocabSize: 100,

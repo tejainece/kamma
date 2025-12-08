@@ -1,7 +1,7 @@
 class GptOssConfig {
   final int vocabSize;
   final int nPositions;
-  final int nEmbd;
+  final int embedDim;
   final int nLayer;
   final int nHead;
   final int nInner;
@@ -26,7 +26,7 @@ class GptOssConfig {
   GptOssConfig({
     this.vocabSize = 50257,
     this.nPositions = 1024,
-    this.nEmbd = 768,
+    this.embedDim = 768,
     this.nLayer = 12,
     this.nHead = 12,
     this.nInner = 0,
@@ -50,26 +50,29 @@ class GptOssConfig {
   factory GptOssConfig.fromJson(Map<String, dynamic> json) {
     return GptOssConfig(
       vocabSize: json['vocab_size'] ?? 50257,
-      nPositions: json['n_positions'] ?? 1024,
-      nEmbd: json['n_embd'] ?? 768,
-      nLayer: json['n_layer'] ?? 12,
-      nHead: json['n_head'] ?? 12,
-      nInner: json['n_inner'] ?? 0,
+      nPositions:
+          json['n_positions'] ?? json['max_position_embeddings'] ?? 1024,
+      embedDim: json['n_embd'] ?? json['hidden_size'] ?? 768,
+      nLayer: json['n_layer'] ?? json['num_hidden_layers'] ?? 12,
+      nHead: json['n_head'] ?? json['num_attention_heads'] ?? 12,
+      nInner: json['n_inner'] ?? json['intermediate_size'] ?? 0,
       residPdrop: (json['resid_pdrop'] ?? 0.1).toDouble(),
       embdPdrop: (json['embd_pdrop'] ?? 0.1).toDouble(),
-      attnPdrop: (json['attn_pdrop'] ?? 0.1).toDouble(),
+      attnPdrop: (json['attn_pdrop'] ?? json['attention_dropout'] ?? 0.1)
+          .toDouble(),
       layerNormEpsilon: (json['layer_norm_epsilon'] ?? 1e-5).toDouble(),
       scaleAttnWeights: json['scale_attn_weights'] ?? true,
       scaleAttnByInverseLayerIdx:
           json['scale_attn_by_inverse_layer_idx'] ?? false,
       reorderAndUpcastAttn: json['reorder_and_upcast_attn'] ?? false,
       useCache: json['use_cache'] ?? true,
-      numExperts: json['num_experts'] ?? 32,
-      numExpertsPerToken: json['num_experts_per_token'] ?? 4,
+      numExperts: json['num_experts'] ?? json['num_local_experts'] ?? 32,
+      numExpertsPerToken:
+          json['num_experts_per_token'] ?? json['num_experts_per_tok'] ?? 4,
       ropeTheta: (json['rope_theta'] ?? 10000.0).toDouble(),
-      ropeScaling: json['rope_scaling'] != null
-          ? (json['rope_scaling'] as num).toDouble()
-          : null,
+      ropeScaling: json['rope_scaling'] is Map
+          ? (json['rope_scaling']['factor'] as num?)?.toDouble()
+          : (json['rope_scaling'] as num?)?.toDouble(),
       numKeyValueHeads: json['num_key_value_heads'],
       rmsNormEps: (json['rms_norm_eps'] ?? 1e-6).toDouble(),
     );

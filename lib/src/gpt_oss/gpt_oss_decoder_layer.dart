@@ -18,8 +18,9 @@ class GptOssDecoderLayer extends Module implements SimpleModule {
   @override
   Tensor forward(
     Tensor hiddenStates, {
-    Tensor? layerPast,
+    List<Tensor>? layerPast,
     Tensor? attentionMask,
+    Tensor? positionIds,
     Tensor? headMask,
     Tensor? encoderHiddenStates,
     Tensor? encoderAttentionMask,
@@ -36,6 +37,7 @@ class GptOssDecoderLayer extends Module implements SimpleModule {
       hiddenStates,
       layerPast: layerPast,
       attentionMask: attentionMask,
+      positionIds: positionIds,
       headMask: headMask,
       encoderHiddenStates: encoderHiddenStates,
       encoderAttentionMask: encoderAttentionMask,
@@ -78,25 +80,52 @@ class GptOssDecoderLayer extends Module implements SimpleModule {
 
   static GptOssDecoderLayer make({
     required String name,
-    required int nEmbed,
+    required int embedDim,
+    required int numHeads,
+    required int nInner,
+    required int nPositions,
+    required double attentionDropoutP,
+    required double residDropoutP,
+    required int numKeyValueHeads,
+    required double ropeTheta,
+    required bool isCrossAttention,
+    required int numExperts,
+    required int numExpertsPerToken,
     required double rmsNormEps,
     int layerIdx = 0,
   }) {
     final ln1 = RMSNorm.make(
       name: 'ln_1',
-      normalizedShape: [nEmbed],
+      normalizedShape: [embedDim],
       eps: rmsNormEps,
     );
 
-    final attention = GptOssAttention.make(name: 'attn', layerIdx: layerIdx);
+    final attention = GptOssAttention.make(
+      name: 'attn',
+      layerIdx: layerIdx,
+      embedDim: embedDim,
+      numHeads: numHeads,
+      nPositions: nPositions,
+      attentionDropoutP: attentionDropoutP,
+      residDropoutP: residDropoutP,
+      numKeyValueHeads: numKeyValueHeads,
+      ropeTheta: ropeTheta,
+      isCrossAttention: isCrossAttention,
+    );
 
     final ln2 = RMSNorm.make(
       name: 'ln_2',
-      normalizedShape: [nEmbed],
+      normalizedShape: [embedDim],
       eps: rmsNormEps,
     );
 
-    final moe = GptOssMoE.make(name: 'moe');
+    final moe = GptOssMoE.make(
+      name: 'moe',
+      embedDim: embedDim,
+      nInner: nInner,
+      numExperts: numExperts,
+      numExpertsPerToken: numExpertsPerToken,
+    );
 
     return GptOssDecoderLayer(
       name: name,
@@ -111,60 +140,81 @@ class GptOssDecoderLayer extends Module implements SimpleModule {
     SafeTensorLoader loader, {
     required String prefix,
     required String name,
-    required int nEmbed,
+    required int embedDim,
+    required int numHeads,
+    required int nInner,
+    required int nPositions,
+    required double attentionDropoutP,
+    required double residDropoutP,
+    required int numKeyValueHeads,
+    required double ropeTheta,
+    required bool isCrossAttention,
+    required int numExperts,
+    required int numExpertsPerToken,
     required double rmsNormEps,
+    String? preAttentionLayerNormName,
+    String? postAttentionLayerNormName,
+    String attentionName = 'self_attn',
+    String moeName = 'mlp',
   }) async {
     // ln_1 is now RMSNorm, might be named 'input_layernorm' or 'ln_1' depending on mapping.
     // Assuming standard gpt-oss naming: input_layernorm
     RMSNorm ln1;
-    String ln1Name;
-    if (loader.hasTensor('${prefix}input_layernorm.weight')) {
-      ln1Name = 'input_layernorm';
-    } else {
-      ln1Name = 'ln_1';
+    if (preAttentionLayerNormName == null) {
+      if (loader.hasTensor('${prefix}input_layernorm.weight')) {
+        preAttentionLayerNormName = 'input_layernorm';
+      } else {
+        preAttentionLayerNormName = 'ln_1';
+      }
     }
     ln1 = await RMSNorm.loadFromSafeTensor(
       loader,
-      prefix: '$prefix$ln1Name.',
-      name: ln1Name,
-      normalizedShape: [nEmbed],
+      prefix: '$prefix$preAttentionLayerNormName.',
+      name: preAttentionLayerNormName,
+      normalizedShape: [embedDim],
       eps: rmsNormEps,
     );
 
     GptOssAttention attention = await GptOssAttention.loadFromSafeTensor(
       loader,
-      prefix: '${prefix}self_attn.',
-    ); // attn usually self_attn
+      prefix: '$prefix$attentionName.',
+      name: attentionName,
+      embedDim: embedDim,
+      numHeads: numHeads,
+      nPositions: nPositions,
+      attentionDropoutP: attentionDropoutP,
+      residDropoutP: residDropoutP,
+      numKeyValueHeads: numKeyValueHeads,
+      ropeTheta: ropeTheta,
+      isCrossAttention: isCrossAttention,
+      layerIdx: 0,
+    );
 
-    // ln_2 -> post_attention_layernorm
     RMSNorm ln2;
-    String ln2Name;
-    if (loader.hasTensor('${prefix}post_attention_layernorm.weight')) {
-      ln2Name = 'post_attention_layernorm';
-    } else {
-      ln2Name = 'ln_2';
+    if (postAttentionLayerNormName == null) {
+      if (loader.hasTensor('${prefix}post_attention_layernorm.weight')) {
+        postAttentionLayerNormName = 'post_attention_layernorm';
+      } else {
+        postAttentionLayerNormName = 'ln_2';
+      }
     }
     ln2 = await RMSNorm.loadFromSafeTensor(
       loader,
-      prefix: '$prefix$ln2Name.',
-      name: ln2Name,
-      normalizedShape: [nEmbed],
+      prefix: '$prefix$postAttentionLayerNormName.',
+      name: postAttentionLayerNormName,
+      normalizedShape: [embedDim],
       eps: rmsNormEps,
     );
-    if (loader.hasTensor('${prefix}post_attention_layernorm.weight')) {
-      await ln2.loadFromSafeTensor_(
-        loader,
-        prefix: '${prefix}post_attention_layernorm.',
-      );
-    } else {
-      await ln2.loadFromSafeTensor_(loader, prefix: '${prefix}ln_2.');
-    }
 
-    // mlp/moe
     GptOssMoE moe = await GptOssMoE.loadFromSafeTensor(
       loader,
-      prefix: '${prefix}mlp.',
-    ); // sometimes 'block_sparse_moe'
+      prefix: '$prefix$moeName.',
+      name: moeName,
+      numExpertsPerToken: numExpertsPerToken,
+      numExperts: numExperts,
+      embedDim: embedDim,
+      nInner: nInner,
+    );
 
     return GptOssDecoderLayer(
       name: name,

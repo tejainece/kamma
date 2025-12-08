@@ -6,7 +6,7 @@ void main() {
     final config = GPT2Config(
       vocabSize: 100,
       nPositions: 20,
-      nEmbd: 32,
+      embedDim: 32,
       nLayer: 2,
       nHead: 4,
     );
@@ -41,30 +41,46 @@ void main() {
   });
 
   test('GPT2Attention forward pass', () {
-    final config = GPT2Config(nEmbd: 32, nHead: 4, nLayer: 2);
-    final attention = GPT2Attention.make(config: config, name: 'attn');
+    final config = GPT2Config(embedDim: 32, nHead: 4, nLayer: 2);
+    final attention = GPT2Attention.make(
+      name: 'attn',
+      layerIdx: 0,
+      embedDim: config.embedDim,
+      numHeads: config.nHead,
+      attentionDropoutProbability: config.attnPdrop,
+      residualDropoutProbability: config.residPdrop,
+      isCrossAttention: false,
+      scaleAttnWeights: config.scaleAttnWeights,
+      scaleAttnByInverseLayerIdx: config.scaleAttnByInverseLayerIdx,
+      reorderAndUpcastAttn: config.reorderAndUpcastAttn,
+    );
     final context = Context.best();
 
     final batchSize = 2;
     final seqLength = 10;
-    final hiddenStates = Tensor.randn([batchSize, seqLength, config.nEmbd]);
+    final hiddenStates = Tensor.randn([batchSize, seqLength, config.embedDim]);
 
     final output = attention.forward(hiddenStates, context: context);
 
-    expect(output.shape, [batchSize, seqLength, config.nEmbd]);
+    expect(output.shape, [batchSize, seqLength, config.embedDim]);
   });
 
   test('GPT2MLP forward pass', () {
-    final config = GPT2Config(nEmbd: 32, nInner: 64);
-    final mlp = GPT2MLP.make(config: config, name: 'mlp');
+    final config = GPT2Config(embedDim: 32, nInner: 64);
+    final mlp = GPT2MLP.make(
+      embedDim: config.embedDim,
+      nInner: config.nInner,
+      residualDropoutProbability: config.residPdrop,
+      name: 'mlp',
+    );
     final context = Context.best();
 
     final batchSize = 2;
     final seqLength = 10;
-    final hiddenStates = Tensor.randn([batchSize, seqLength, config.nEmbd]);
+    final hiddenStates = Tensor.randn([batchSize, seqLength, config.embedDim]);
 
     final output = mlp.forward(hiddenStates, context: context);
 
-    expect(output.shape, [batchSize, seqLength, config.nEmbd]);
+    expect(output.shape, [batchSize, seqLength, config.embedDim]);
   });
 }

@@ -95,19 +95,19 @@ class ClipAttention extends Module {
     required String name,
     required ClipTextConfig config,
   }) async {
-    final qProj = await LinearLayer.loadFromSafeTensorStatic(
+    final qProj = await LinearLayer.loadFromSafeTensor(
       loader,
       prefix: '${prefix}q_proj.',
     );
-    final kProj = await LinearLayer.loadFromSafeTensorStatic(
+    final kProj = await LinearLayer.loadFromSafeTensor(
       loader,
       prefix: '${prefix}k_proj.',
     );
-    final vProj = await LinearLayer.loadFromSafeTensorStatic(
+    final vProj = await LinearLayer.loadFromSafeTensor(
       loader,
       prefix: '${prefix}v_proj.',
     );
-    final outProj = await LinearLayer.loadFromSafeTensorStatic(
+    final outProj = await LinearLayer.loadFromSafeTensor(
       loader,
       prefix: '${prefix}out_proj.',
     );

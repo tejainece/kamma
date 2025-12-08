@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:kamma/kamma.dart';
+import 'package:kamma/src/gpt_oss/rotrary_embedding.dart';
 
 class GptOssAttention extends Module {
   final int embedDim;
@@ -15,7 +16,7 @@ class GptOssAttention extends Module {
   final LinearLayer vProj;
   final LinearLayer oProj;
 
-  final RotaryEmbedding rotaryEmb;
+  final GptOssRotaryEmbedding rotaryEmb;
   final Dropout attnDropout;
   final Dropout residDropout;
 
@@ -58,8 +59,9 @@ class GptOssAttention extends Module {
 
   Tensor forward(
     Tensor hiddenStates, {
-    Tensor? layerPast,
     Tensor? attentionMask,
+    Tensor? positionIds,
+    List<Tensor>? layerPast,
     bool useCache = false,
     required Context context,
     // Unused args from GPT2 kept for compat if needed
@@ -93,7 +95,25 @@ class GptOssAttention extends Module {
         .permute([0, 2, 1, 3]);
 
     // 3. Apply RoPE (inplace on q, k)
-    rotaryEmb.applyRotaryPosEmb(q, k, context: context);
+    // rotaryEmb.applyRotaryPosEmb(q, k, context: context);
+
+    // Create default position IDs if not provided
+    final posIds =
+        positionIds ??
+        Tensor.arange(
+          0,
+          seqLen,
+          datatype: DataType.int64,
+          device: hiddenStates.device, // Crucial: create on same device
+        ).unsqueeze(0).expand([batchSize, seqLen]);
+
+    final ropeOutput = rotaryEmb.forward(posIds, seqLen: seqLen);
+    GptOssRotaryEmbedding.applyRotaryPosEmb(
+      q,
+      k,
+      ropeOutput.cos,
+      ropeOutput.sin,
+    );
 
     // 4. KV Cache handling
     if (layerPast != null) {
@@ -139,12 +159,11 @@ class GptOssAttention extends Module {
     kProj.resetParameters();
     vProj.resetParameters();
     oProj.resetParameters();
-    rotaryEmb.populate();
+    // TODO rotaryEmb.populate();
   }
 
   @override
-  late final Iterable<Tensor> parameters = [
-  ];
+  late final Iterable<Tensor> parameters = [];
 
   @override
   late final Iterable<Module> submodules = [
@@ -154,6 +173,7 @@ class GptOssAttention extends Module {
     oProj,
     attnDropout,
     residDropout,
+    rotaryEmb,
   ];
 
   @override
@@ -165,7 +185,7 @@ class GptOssAttention extends Module {
     "layerIdx": layerIdx,
   };
 
-  Future<void> loadFromSafeTensor(
+  Future<void> copyFromSafeTensor(
     SafeTensorLoader loader, {
     required String prefix,
     String qProjName = 'q_proj',
@@ -199,36 +219,42 @@ class GptOssAttention extends Module {
     String kProjName = 'k_proj',
     String vProjName = 'v_proj',
     String oProjName = 'o_proj',
-    required int nEmbed,
-    required int nHead,
+    required int embedDim,
+    required int numHeads,
     required int nPositions,
     required int? numKeyValueHeads,
     required double ropeTheta,
     required double attentionDropoutP,
     required double residDropoutP,
+    required bool isCrossAttention,
+    required int layerIdx,
   }) async {
-    final qProj = await LinearLayer.loadFromSafeTensorStatic(
+    final qProj = await LinearLayer.loadFromSafeTensor(
       loader,
       prefix: '${prefix}q_proj.',
       name: qProjName,
     );
-    final kProj = await LinearLayer.loadFromSafeTensorStatic(
+    final kProj = await LinearLayer.loadFromSafeTensor(
       loader,
       prefix: '${prefix}k_proj.',
       name: kProjName,
     );
-    final vProj = await LinearLayer.loadFromSafeTensorStatic(
+    final vProj = await LinearLayer.loadFromSafeTensor(
       loader,
       prefix: '${prefix}v_proj.',
       name: vProjName,
     );
-    final oProj = await LinearLayer.loadFromSafeTensorStatic(
+    final oProj = await LinearLayer.loadFromSafeTensor(
       loader,
       prefix: '${prefix}o_proj.',
       name: oProjName,
     );
-    final rotaryEmb = await RotaryEmbedding.loadFromSafeTensor(
-
+    final headDim = embedDim ~/ numHeads;
+    final rotaryEmb = GptOssRotaryEmbedding(
+      name: 'rope',
+      base: ropeTheta,
+      dim: headDim,
+      maxPositionEmbeddings: nPositions,
     );
 
     final attnDropout = Dropout(attentionDropoutP);
@@ -239,17 +265,20 @@ class GptOssAttention extends Module {
       kProj: kProj,
       vProj: vProj,
       oProj: oProj,
-      rotaryEmb: ,
+      rotaryEmb: rotaryEmb,
       attnDropout: attnDropout,
       residDropout: residDropout,
-      embedDim: nEmbed,
-      numHeads: nHead,
+      embedDim: embedDim,
+      numHeads: numHeads,
+      numKeyValueHeads: numKeyValueHeads,
+      isCrossAttention: isCrossAttention,
+      layerIdx: layerIdx,
     );
   }
 
   static GptOssAttention make({
     required String name,
-    bool isCrossAttention = false,
+    required bool isCrossAttention,
     required int embedDim,
     required int numHeads,
     required int nPositions,
@@ -257,7 +286,7 @@ class GptOssAttention extends Module {
     required double ropeTheta,
     required double attentionDropoutP,
     required double residDropoutP,
-    int layerIdx = 0,
+    required int layerIdx,
   }) {
     final headDim = embedDim ~/ numHeads;
     numKeyValueHeads = numKeyValueHeads ?? numHeads;
@@ -290,11 +319,11 @@ class GptOssAttention extends Module {
       hasBias: false,
     );
 
-    final rotaryEmb = RotaryEmbedding(
+    final rotaryEmb = GptOssRotaryEmbedding(
       name: '$name.rotary_emb',
+      base: ropeTheta,
       dim: headDim,
       maxPositionEmbeddings: nPositions,
-      base: ropeTheta,
     );
 
     final attnDropout = Dropout(attentionDropoutP);

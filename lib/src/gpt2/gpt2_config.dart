@@ -1,7 +1,7 @@
 class GPT2Config {
   final int vocabSize;
   final int nPositions;
-  final int nEmbd;
+  final int embedDim;
   final int nLayer;
   final int nHead;
   final int nInner;
@@ -19,7 +19,7 @@ class GPT2Config {
   GPT2Config({
     this.vocabSize = 50257,
     this.nPositions = 1024,
-    this.nEmbd = 768,
+    this.embedDim = 768,
     this.nLayer = 12,
     this.nHead = 12,
     this.nInner = 0, // 0 means nEmbd * 4
@@ -38,7 +38,7 @@ class GPT2Config {
     return GPT2Config(
       vocabSize: json['vocab_size'] ?? 50257,
       nPositions: json['n_positions'] ?? 1024,
-      nEmbd: json['n_embd'] ?? 768,
+      embedDim: json['n_embd'] ?? 768,
       nLayer: json['n_layer'] ?? 12,
       nHead: json['n_head'] ?? 12,
       nInner: json['n_inner'] ?? 0,

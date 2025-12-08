@@ -2,10 +2,7 @@ import 'dart:math';
 import 'package:kamma/kamma.dart';
 
 class GPT2Attention extends Module {
-  final int embedDim;
   final int numHeads;
-  final int headDim;
-  final int splitSize;
   final bool scaleAttnWeights;
   final bool scaleAttnByInverseLayerIdx;
   final bool reorderAndUpcastAttn;
@@ -19,20 +16,17 @@ class GPT2Attention extends Module {
 
   GPT2Attention({
     required super.name,
-    required GPT2Config config,
     this.isCrossAttention = false,
     this.layerIdx = 0,
     required this.cAttn,
     required this.cProj,
     required this.attnDropout,
     required this.residDropout,
-  }) : embedDim = config.nEmbd,
-       numHeads = config.nHead,
-       headDim = config.nEmbd ~/ config.nHead,
-       splitSize = config.nEmbd,
-       scaleAttnWeights = config.scaleAttnWeights,
-       scaleAttnByInverseLayerIdx = config.scaleAttnByInverseLayerIdx,
-       reorderAndUpcastAttn = config.reorderAndUpcastAttn {
+    required this.numHeads,
+    required this.scaleAttnWeights,
+    required this.scaleAttnByInverseLayerIdx,
+    required this.reorderAndUpcastAttn,
+  }) {
     if (embedDim % numHeads != 0) {
       throw ArgumentError(
         "embed_dim must be divisible by num_heads (got `embed_dim`: $embedDim"
@@ -40,6 +34,12 @@ class GPT2Attention extends Module {
       );
     }
   }
+
+  int get embedDim => cAttn.inFeatures;
+
+  int get splitSize => embedDim;
+
+  late final int headDim = embedDim ~/ numHeads;
 
   Tensor _attn(
     Tensor query,
@@ -174,10 +174,7 @@ class GPT2Attention extends Module {
   }
 
   @override
-  late final Iterable<Tensor> parameters = [
-    ...cAttn.parameters,
-    ...cProj.parameters,
-  ];
+  final Iterable<Tensor> parameters = const [];
 
   @override
   late final Iterable<Module> submodules = [
@@ -201,60 +198,88 @@ class GPT2Attention extends Module {
   };
 
   static GPT2Attention make({
-    required GPT2Config config,
     required String name,
-    bool isCrossAttention = false,
-    int layerIdx = 0,
+    required bool isCrossAttention,
+    required int layerIdx,
+    required int embedDim,
+    required double attentionDropoutProbability,
+    required double residualDropoutProbability,
+    required int numHeads,
+    required bool scaleAttnWeights,
+    required bool scaleAttnByInverseLayerIdx,
+    required bool reorderAndUpcastAttn,
   }) {
     final cAttn = LinearLayer.make(
       name: 'c_attn',
-      inFeatures: config.nEmbd,
-      outFeatures: 3 * config.nEmbd,
+      inFeatures: embedDim,
+      outFeatures: 3 * embedDim,
     );
 
     final cProj = LinearLayer.make(
       name: 'c_proj',
-      inFeatures: config.nEmbd,
-      outFeatures: config.nEmbd,
+      inFeatures: embedDim,
+      outFeatures: embedDim,
     );
 
-    final attnDropout = Dropout(config.attnPdrop);
-    final residDropout = Dropout(config.residPdrop);
+    final attnDropout = Dropout(attentionDropoutProbability);
+    final residDropout = Dropout(residualDropoutProbability);
 
     return GPT2Attention(
       name: name,
-      config: config,
       isCrossAttention: isCrossAttention,
       layerIdx: layerIdx,
       cAttn: cAttn,
       cProj: cProj,
       attnDropout: attnDropout,
       residDropout: residDropout,
+      numHeads: numHeads,
+      scaleAttnWeights: scaleAttnWeights,
+      scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
+      reorderAndUpcastAttn: reorderAndUpcastAttn,
     );
   }
 
-  Future<void> loadFromSafeTensor(
+  static Future<GPT2Attention> loadFromSafeTensor(
     SafeTensorLoader loader, {
     required String prefix,
+    required String name,
+    required int layerIdx,
+    required double attentionDropoutProbability,
+    required double residualDropoutProbability,
+    required bool isCrossAttention,
+    required int numHeads,
+    String cAttnName = 'c_attn',
+    String cProjName = 'c_proj',
+    required bool scaleAttnWeights,
+    required bool scaleAttnByInverseLayerIdx,
+    required bool reorderAndUpcastAttn,
   }) async {
-    // Load c_attn
-    if (loader.hasTensor('${prefix}c_attn.weight')) {
-      final weight = await loader.loadByName('${prefix}c_attn.weight');
-      cAttn.weight.copy_(weight.transpose(0, 1));
-    }
-    if (loader.hasTensor('${prefix}c_attn.bias')) {
-      final bias = await loader.loadByName('${prefix}c_attn.bias');
-      cAttn.bias!.copy_(bias);
-    }
+    final cAttn = await LinearLayer.loadFromSafeTensor(
+      loader,
+      prefix: '$prefix$cAttnName.',
+      name: cAttnName,
+    );
+    final cProj = await LinearLayer.loadFromSafeTensor(
+      loader,
+      prefix: '$prefix$cProjName.',
+      name: cProjName,
+    );
 
-    // Load c_proj
-    if (loader.hasTensor('${prefix}c_proj.weight')) {
-      final weight = await loader.loadByName('${prefix}c_proj.weight');
-      cProj.weight.copy_(weight.transpose(0, 1));
-    }
-    if (loader.hasTensor('${prefix}c_proj.bias')) {
-      final bias = await loader.loadByName('${prefix}c_proj.bias');
-      cProj.bias!.copy_(bias);
-    }
+    final attnDropout = Dropout(attentionDropoutProbability);
+    final residDropout = Dropout(residualDropoutProbability);
+
+    return GPT2Attention(
+      name: name,
+      isCrossAttention: isCrossAttention,
+      layerIdx: layerIdx,
+      cAttn: cAttn,
+      cProj: cProj,
+      attnDropout: attnDropout,
+      residDropout: residDropout,
+      numHeads: numHeads,
+      scaleAttnWeights: scaleAttnWeights,
+      scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
+      reorderAndUpcastAttn: reorderAndUpcastAttn,
+    );
   }
 }

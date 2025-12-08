@@ -1,9 +1,6 @@
 import 'package:kamma/kamma.dart';
 
 class GPT2Model extends Module {
-  final int embedDim;
-  final int vocabSize;
-  final int nPositions;
   final EmbeddingLayer wte;
   final EmbeddingLayer wpe;
   final Dropout drop;
@@ -12,15 +9,12 @@ class GPT2Model extends Module {
 
   GPT2Model({
     required super.name,
-    required this.embedDim,
-    required this.vocabSize,
-    required this.nPositions,
     required this.wte,
     required this.wpe,
     required this.drop,
     required this.h,
     required this.lnF,
-  });
+  }) : assert(wte.embeddingDim == wpe.embeddingDim);
 
   @override
   Tensor forward(
@@ -91,6 +85,12 @@ class GPT2Model extends Module {
     return hiddenStates;
   }
 
+  int get embedDim => wte.embeddingDim;
+
+  int get vocabSize => wte.numEmbeddings;
+
+  int get nPositions => wpe.numEmbeddings;
+
   @override
   void resetParameters() {
     wte.resetParameters();
@@ -103,12 +103,7 @@ class GPT2Model extends Module {
   }
 
   @override
-  late final Iterable<Tensor> parameters = [
-    ...wte.parameters,
-    ...wpe.parameters,
-    ...h.expand((block) => block.parameters),
-    ...lnF.parameters,
-  ];
+  late final Iterable<Tensor> parameters = [];
 
   @override
   Map<String, dynamic> get meta => {
@@ -120,37 +115,69 @@ class GPT2Model extends Module {
   @override
   late final Iterable<Module> submodules = [wte, wpe, drop, ...h, lnF];
 
-  static GPT2Model make({required GPT2Config config, required String name}) {
+  static GPT2Model make({
+    required String name,
+    required double embedDropoutProbability,
+    required double attentionDropoutProbability,
+    required double residualDropoutProbability,
+    required int vocabSize,
+    required int embedDim,
+    required int numHeads,
+    required int nPositions,
+    required int nLayer,
+    required double layerNormEpsilon,
+    required bool isCrossAttention,
+    required bool scaleAttnWeights,
+    required bool scaleAttnByInverseLayerIdx,
+    required bool reorderAndUpcastAttn,
+    required int nInner,
+    String wteName = 'wte',
+    String wpeName = 'wpe',
+    String lnFName = 'ln_f',
+    String hName = 'h',
+  }) {
     final wte = EmbeddingLayer.make(
-      config.vocabSize,
-      config.nEmbd,
-      name: 'wte',
+      numEmbeddings: vocabSize,
+      embedDim: embedDim,
+      name: wteName,
     );
 
     final wpe = EmbeddingLayer.make(
-      config.nPositions,
-      config.nEmbd,
-      name: 'wpe',
+      numEmbeddings: nPositions,
+      embedDim: embedDim,
+      name: wpeName,
     );
 
-    final drop = Dropout(config.embdPdrop);
+    final drop = Dropout(embedDropoutProbability);
 
     final h = <GPT2Block>[];
-    for (int i = 0; i < config.nLayer; i++) {
-      h.add(GPT2Block.make(config: config, name: 'h.$i', layerIdx: i));
+    for (int i = 0; i < nLayer; i++) {
+      h.add(
+        GPT2Block.make(
+          name: '$hName.$i',
+          layerIdx: i,
+          attentionDropoutProbability: attentionDropoutProbability,
+          residualDropoutProbability: residualDropoutProbability,
+          embedDim: embedDim,
+          numHeads: numHeads,
+          layerNormEpsilon: layerNormEpsilon,
+          isCrossAttention: isCrossAttention,
+          scaleAttnWeights: scaleAttnWeights,
+          scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
+          reorderAndUpcastAttn: reorderAndUpcastAttn,
+          nInner: nInner,
+        ),
+      );
     }
 
     final lnF = LayerNorm.make(
-      name: 'ln_f',
-      normalizedShape: [config.nEmbd],
-      eps: config.layerNormEpsilon,
+      name: lnFName,
+      normalizedShape: [embedDim],
+      eps: layerNormEpsilon,
     );
 
     return GPT2Model(
       name: name,
-      embedDim: config.nEmbd,
-      vocabSize: config.vocabSize,
-      nPositions: config.nPositions,
       wte: wte,
       wpe: wpe,
       drop: drop,
@@ -159,14 +186,67 @@ class GPT2Model extends Module {
     );
   }
 
-  Future<void> loadFromSafeTensor(SafeTensorLoader loader) async {
-    await wte.loadFromSafeTensor(loader, prefix: 'wte.');
-    await wpe.loadFromSafeTensor(loader, prefix: 'wpe.');
+  static Future<GPT2Model> loadFromSafeTensor(
+    SafeTensorLoader loader, {
+    required String name,
+    String prefix = '',
+    String wteName = 'wte',
+    String wpeName = 'wpe',
+    String layerNormName = 'ln_f',
+    required double embedDropoutProbability,
+    required double attentionDropoutProbability,
+    required double residualDropoutProbability,
+    required double layerNormEpsilon,
+    required int numHeads,
+    required bool scaleAttnWeights,
+    required bool scaleAttnByInverseLayerIdx,
+    required bool reorderAndUpcastAttn,
+  }) async {
+    final wte = await EmbeddingLayer.loadFromSafeTensor(
+      loader,
+      name: 'wte',
+      prefix: '$prefix$wteName.',
+    );
+    final wpe = await EmbeddingLayer.loadFromSafeTensor(
+      loader,
+      name: 'wpe',
+      prefix: '$prefix$wpeName.',
+    );
+    final int embedDim = wte.embeddingDim;
 
-    for (int i = 0; i < h.length; i++) {
-      await h[i].loadFromSafeTensor(loader, prefix: 'h.$i.');
+    final blocks = <GPT2Block>[];
+    for (int i = 0; true; i++) {
+      final path = '${prefix}h.$i.';
+      if (!loader.hasTensorWithPrefix(path)) break;
+      final block = await GPT2Block.loadFromSafeTensor(
+        loader,
+        name: 'h.$i',
+        prefix: path,
+        layerNormEpsilon: layerNormEpsilon,
+        attentionDropoutProbability: attentionDropoutProbability,
+        residualDropoutProbability: residualDropoutProbability,
+        numHeads: numHeads,
+        isCrossAttention: false, // Default for now
+        layerIdx: i,
+        scaleAttnWeights: scaleAttnWeights,
+        scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
+        reorderAndUpcastAttn: reorderAndUpcastAttn,
+      );
+      blocks.add(block);
     }
-
-    await lnF.loadFromSafeTensor_(loader, prefix: 'ln_f.');
+    final lnF = await LayerNorm.loadFromSafeTensor(
+      loader,
+      name: layerNormName,
+      prefix: Module.combineDirs(prefix, layerNormName),
+      normalizedShape: [embedDim],
+    );
+    return GPT2Model(
+      name: name,
+      wte: wte,
+      wpe: wpe,
+      drop: Dropout(embedDropoutProbability),
+      h: blocks,
+      lnF: lnF,
+    );
   }
 }
