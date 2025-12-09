@@ -86,6 +86,7 @@ class GptOssRotaryEmbedding extends Module {
     // invFreq: [1, dim/2, 1]
     final invFreqView = invFreq
         .view([1, invFreq.shape[0], 1])
+        .expand([positionIds.shape[0], -1, 1])
         .to(device: positionIds.device); // Ensure on same device as input
 
     // positionIds: [batch, 1, seq]
