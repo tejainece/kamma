@@ -6,3 +6,4 @@ export 'src/gpt2/gpt2.dart';
 export 'src/s3dit/s3dit.dart';
 export 'src/decision_transformer/decision_transformer_model.dart';
 export 'src/gpt_oss/gpt_oss.dart';
+export 'src/gpt1/gpt1.dart';

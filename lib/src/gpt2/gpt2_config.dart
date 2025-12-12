@@ -15,6 +15,7 @@ class GPT2Config {
   final bool scaleAttnByInverseLayerIdx;
   final bool reorderAndUpcastAttn;
   final bool useCache;
+  final int maxPositionEmbeddings;
 
   GPT2Config({
     this.vocabSize = 50257,
@@ -32,6 +33,7 @@ class GPT2Config {
     this.scaleAttnByInverseLayerIdx = false,
     this.reorderAndUpcastAttn = false,
     this.useCache = true,
+    this.maxPositionEmbeddings = 1024,
   });
 
   factory GPT2Config.fromJson(Map<String, dynamic> json) {

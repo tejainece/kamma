@@ -57,13 +57,11 @@ class DecisionTransformerModel extends Module {
     final batchSize = states.shape[0];
     final seqLen = states.shape[1];
 
-    if (attentionMask == null) {
-      attentionMask = Tensor.ones(
-        [batchSize, seqLen],
-        datatype: DataType.float32,
-        device: states.device,
-      );
-    }
+    attentionMask ??= Tensor.ones(
+      [batchSize, seqLen],
+      dataType: DataType.float32,
+      device: states.device,
+    );
 
     // Embeddings
     final timeEmbeddings = embedTime.forward(timesteps, context: context);
@@ -169,10 +167,10 @@ class DecisionTransformerModel extends Module {
     // Re-extracting:
     // hiddenStates is (batch, seq_len, 3, hidden_size)
     final s_hidden = hiddenStates
-        .index([Slice.all(), Slice.all(), 1])
+        .index([.all, .all, .i(1)])
         .squeeze(dim: 2); // Index 1
     final a_hidden = hiddenStates
-        .index([Slice.all(), Slice.all(), 2])
+        .index([.all, .all, .i(2)])
         .squeeze(dim: 2); // Index 2
     // For return prediction, usually we predict next return? Or return at current step?
     // Standard implementation often predicts return from state (or action?).
@@ -283,6 +281,7 @@ class DecisionTransformerModel extends Module {
           scaleAttnByInverseLayerIdx: config.scaleAttnByInverseLayerIdx,
           reorderAndUpcastAttn: config.reorderAndUpcastAttn,
           nInner: config.nInner,
+          maxPositionEmbeddings: config.maxPositionEmbeddings,
         ),
       );
     }

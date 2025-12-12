@@ -19,7 +19,7 @@ class MockTokenizer {
     tokens = tokens.to(device: Device.cpu).flatten();
     final List<int> ids = [];
     for (int i = 0; i < tokens.shape[0]; i++) {
-      ids.add(tokens.scalarAt(i) as int);
+      ids.add(tokens.at([i]).scalar as int);
     }
     return ids.map((id) => reverseVocab[id] ?? '<unk>').join(' ');
   }

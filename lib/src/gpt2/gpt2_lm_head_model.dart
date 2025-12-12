@@ -248,6 +248,7 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
       scaleAttnByInverseLayerIdx: config.scaleAttnByInverseLayerIdx,
       reorderAndUpcastAttn: config.reorderAndUpcastAttn,
       nInner: config.nInner,
+      maxPositionEmbeddings: config.maxPositionEmbeddings,
     );
 
     final lmHead = LinearLayer.make(
@@ -288,6 +289,7 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
     required bool scaleAttnWeights,
     required bool scaleAttnByInverseLayerIdx,
     required bool reorderAndUpcastAttn,
+    required int maxPositionEmbeddings,
     String lmHeadName = 'lm_f.',
     String transformerName = '',
   }) async {
@@ -303,6 +305,7 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
       scaleAttnWeights: scaleAttnWeights,
       scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
       reorderAndUpcastAttn: reorderAndUpcastAttn,
+      maxPositionEmbeddings: maxPositionEmbeddings,
     );
 
     final lmHead = await LinearLayer.loadFromSafeTensor(

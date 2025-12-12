@@ -9,10 +9,13 @@ class GPT2Attention extends Module {
   final bool isCrossAttention;
   final int layerIdx;
 
+  /// Contains/performs q_proj, k_proj, v_proj in single linear layer for efficiency.
   final LinearLayer cAttn;
   final LinearLayer cProj;
   final Dropout attnDropout;
   final Dropout residDropout;
+
+  final Tensor bias;
 
   GPT2Attention({
     required super.name,
@@ -22,6 +25,7 @@ class GPT2Attention extends Module {
     required this.cProj,
     required this.attnDropout,
     required this.residDropout,
+    required this.bias,
     required this.numHeads,
     required this.scaleAttnWeights,
     required this.scaleAttnByInverseLayerIdx,
@@ -41,6 +45,7 @@ class GPT2Attention extends Module {
 
   late final int headDim = embedDim ~/ numHeads;
 
+  // TODO use SDAP
   Tensor _attn(
     Tensor query,
     Tensor key,
@@ -49,20 +54,56 @@ class GPT2Attention extends Module {
     Tensor? headMask,
     required Context context,
   }) {
-    Tensor attnWeights = query.matmul(key.transpose(-1, -2));
+    final [batchSize, numHeads, qSeqLength, headDim] = query.shape;
+    final [_, _, kSeqLength, _] = key.shape;
 
+    // Prealicate attentionWeights. Will be populated by baddbmm
+    Tensor attentionWeights = Tensor.empty(
+      [batchSize * numHeads, qSeqLength, kSeqLength],
+      datatype: DataType.float32,
+      device: context.device,
+    );
+
+    double scaleFactor = 1.0;
     if (scaleAttnWeights) {
-      attnWeights = attnWeights / sqrt(value.shape.last.toDouble());
+      scaleFactor /= sqrt(value.shape.last);
+    }
+    if (scaleAttnByInverseLayerIdx) {
+      scaleFactor /= (layerIdx + 1);
     }
 
-    if (scaleAttnByInverseLayerIdx) {
-      attnWeights = attnWeights / (layerIdx + 1).toDouble();
+    context.device.withAutocast(false, () {
+      Tensor q = query
+          .reshape([-1, qSeqLength, headDim])
+          .to(dataType: DataType.float32);
+      Tensor k = key
+          .transpose(-1, -2)
+          .reshape([-1, headDim, kSeqLength])
+          .to(dataType: DataType.float32);
+      attentionWeights.baddbmm_(q, k, beta: 0, alpha: scaleFactor);
+      attentionWeights = attentionWeights.reshape([
+        batchSize,
+        numHeads,
+        qSeqLength,
+        kSeqLength,
+      ]);
+    });
+
+    if (!isCrossAttention) {
+      final causalMask = bias.index([
+        .all,
+        .all,
+        .slice(kSeqLength - qSeqLength),
+        .slice(kSeqLength - qSeqLength),
+      ]);
+      // TODO
     }
 
     if (reorderAndUpcastAttn) {
       // TODO: Implement reorder and upcast if needed, usually for mixed precision
     }
 
+    /* TODO
     if (attentionMask != null) {
       attnWeights = attnWeights + attentionMask;
     }
@@ -73,11 +114,16 @@ class GPT2Attention extends Module {
     if (headMask != null) {
       attnWeights = attnWeights * headMask;
     }
+    */
 
-    Tensor attnOutput = attnWeights.matmul(value);
+    Tensor attnOutput = attentionWeights.matmul(value);
     return attnOutput;
   }
 
+  /// [tensor] is of shape (batch, seq_length, embed_dim). embed_dim consists of multiple heads([numHeads])
+  /// each of size [attnHeadSize]. This function splits the [tensor] into multiple heads with each head
+  /// of shape (seq_length, attnHeadSize).
+  /// It returns a tensor of shape (batch, numHeads, seq_length, attnHeadSize).
   Tensor _splitHeads(Tensor tensor, int numHeads, int attnHeadSize) {
     final newShape = [
       ...tensor.shape.sublist(0, tensor.shape.length - 1),
@@ -103,8 +149,9 @@ class GPT2Attention extends Module {
   }
 
   @override
+  /// [input] is of size (batch, seq_length, embed_dim)
   Tensor forward(
-    Tensor hiddenStates, {
+    Tensor input, {
     Tensor? layerPast,
     Tensor? attentionMask,
     Tensor? headMask,
@@ -116,13 +163,15 @@ class GPT2Attention extends Module {
   }) {
     context.onloadModule(this);
 
+    // TODO key,value cache
+
     Tensor query, key, value;
     if (isCrossAttention) {
       assert(
         encoderHiddenStates != null,
         "encoder_hidden_states must be provided for cross attention",
       );
-      query = cAttn.forward(hiddenStates, context: context);
+      query = cAttn.forward(input, context: context);
       query = _splitHeads(query, numHeads, headDim);
 
       final keyVal = cAttn.forward(encoderHiddenStates!, context: context);
@@ -130,7 +179,7 @@ class GPT2Attention extends Module {
       key = _splitHeads(splitKeyVal[0], numHeads, headDim);
       value = _splitHeads(splitKeyVal[1], numHeads, headDim);
     } else {
-      final qkv = cAttn.forward(hiddenStates, context: context);
+      final qkv = cAttn.forward(input, context: context);
       final splitQkv = qkv.splitEqually(splitSize, dim: 2);
       query = _splitHeads(splitQkv[0], numHeads, headDim);
       key = _splitHeads(splitQkv[1], numHeads, headDim);
@@ -170,11 +219,13 @@ class GPT2Attention extends Module {
   void resetParameters() {
     cAttn.resetParameters();
     cProj.resetParameters();
-    // Dropouts don't need reset
   }
 
   @override
   final Iterable<Tensor> parameters = const [];
+
+  @override
+  late final Iterable<Tensor> nonTrainableParameters = [bias];
 
   @override
   late final Iterable<Module> submodules = [
@@ -208,6 +259,7 @@ class GPT2Attention extends Module {
     required bool scaleAttnWeights,
     required bool scaleAttnByInverseLayerIdx,
     required bool reorderAndUpcastAttn,
+    required int maxPositionEmbeddings,
   }) {
     final cAttn = LinearLayer.make(
       name: 'c_attn',
@@ -224,6 +276,11 @@ class GPT2Attention extends Module {
     final attnDropout = Dropout(attentionDropoutProbability);
     final residDropout = Dropout(residualDropoutProbability);
 
+    final bias = Tensor.ones(
+      [maxPositionEmbeddings, maxPositionEmbeddings],
+      dataType: DataType.boolean,
+    ).tril().view([1, 1, maxPositionEmbeddings, maxPositionEmbeddings]);
+
     return GPT2Attention(
       name: name,
       isCrossAttention: isCrossAttention,
@@ -236,6 +293,7 @@ class GPT2Attention extends Module {
       scaleAttnWeights: scaleAttnWeights,
       scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
       reorderAndUpcastAttn: reorderAndUpcastAttn,
+      bias: bias,
     );
   }
 
@@ -253,6 +311,7 @@ class GPT2Attention extends Module {
     required bool scaleAttnWeights,
     required bool scaleAttnByInverseLayerIdx,
     required bool reorderAndUpcastAttn,
+    required int maxPositionEmbeddings,
   }) async {
     final cAttn = await LinearLayer.loadFromSafeTensor(
       loader,
@@ -268,6 +327,11 @@ class GPT2Attention extends Module {
     final attnDropout = Dropout(attentionDropoutProbability);
     final residDropout = Dropout(residualDropoutProbability);
 
+    final bias = Tensor.ones(
+      [maxPositionEmbeddings, maxPositionEmbeddings],
+      dataType: DataType.boolean,
+    ).tril().view([1, 1, maxPositionEmbeddings, maxPositionEmbeddings]);
+
     return GPT2Attention(
       name: name,
       isCrossAttention: isCrossAttention,
@@ -280,6 +344,7 @@ class GPT2Attention extends Module {
       scaleAttnWeights: scaleAttnWeights,
       scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
       reorderAndUpcastAttn: reorderAndUpcastAttn,
+      bias: bias,
     );
   }
 }

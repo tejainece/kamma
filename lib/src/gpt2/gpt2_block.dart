@@ -90,6 +90,7 @@ class GPT2Block extends Module implements SimpleModule {
     required double attentionDropoutProbability,
     required double residualDropoutProbability,
     required bool isCrossAttention,
+    required int maxPositionEmbeddings,
   }) {
     final ln1 = LayerNorm.make(
       name: 'ln_1',
@@ -108,6 +109,7 @@ class GPT2Block extends Module implements SimpleModule {
       scaleAttnWeights: scaleAttnWeights,
       scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
       reorderAndUpcastAttn: reorderAndUpcastAttn,
+      maxPositionEmbeddings: maxPositionEmbeddings,
     );
 
     final ln2 = LayerNorm.make(
@@ -143,6 +145,7 @@ class GPT2Block extends Module implements SimpleModule {
     required bool scaleAttnWeights,
     required bool scaleAttnByInverseLayerIdx,
     required bool reorderAndUpcastAttn,
+    required int maxPositionEmbeddings,
   }) async {
     final attn = await GPT2Attention.loadFromSafeTensor(
       loader,
@@ -156,6 +159,7 @@ class GPT2Block extends Module implements SimpleModule {
       scaleAttnWeights: scaleAttnWeights,
       scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
       reorderAndUpcastAttn: reorderAndUpcastAttn,
+      maxPositionEmbeddings: maxPositionEmbeddings,
     );
     final embedDim = attn.embedDim;
     final ln1 = await LayerNorm.loadFromSafeTensor(

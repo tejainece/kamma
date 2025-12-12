@@ -108,6 +108,7 @@ void main() {
           scaleAttnWeights: config.scaleAttnWeights,
           scaleAttnByInverseLayerIdx: config.scaleAttnByInverseLayerIdx,
           reorderAndUpcastAttn: config.reorderAndUpcastAttn,
+          maxPositionEmbeddings: config.maxPositionEmbeddings,
         );
       } else {
         print('Weights not found, using random weights and dummy vocab');

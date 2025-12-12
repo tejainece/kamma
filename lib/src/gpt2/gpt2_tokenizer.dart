@@ -189,7 +189,7 @@ class GPT2Tokenizer {
     final byteDecoder = bytesToUnicode().map((k, v) => MapEntry(v, k));
 
     for (var i = 0; i < tokens.shape[0]; i++) {
-      final token = tokens.scalarAt(i) as int;
+      final token = tokens.at([i]).scalar as int;
       final tokenString = decoder[token] ?? '';
       textBuilder.write(tokenString);
     }

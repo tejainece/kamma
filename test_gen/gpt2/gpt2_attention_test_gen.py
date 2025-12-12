@@ -19,15 +19,11 @@ config = GPT2Config(
     resid_pdrop=dropout,
     n_layer=12,
 )
+config._attn_implementation = 'eager'
 
-# Instantiate GPT2Attention
-# In HF GPT2, layer_idx is often passed during init or forward. 
-# We'll pass it during init to match some usages, though HF GPT2Attention signature is:
-# __init__(self, config, is_cross_attention=False, layer_idx=None)
 attn = GPT2Attention(config, layer_idx=0)
 attn.eval() # Ensure dropout is off
 
-# Inputs
 hidden_states = torch.randn(batch_size, seq_len, embed_dim)
 # Attention mask in HF GPT2 is usually (batch, 1, 1, seq_len) or (batch, 1, seq_len, seq_len)
 # For simple causal attention, we can pass None or a specific mask.

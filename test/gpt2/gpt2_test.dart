@@ -16,7 +16,7 @@ void main() {
     final batchSize = 2;
     final seqLength = 10;
 
-    final inputIds = Tensor.ones([1, 10], datatype: DataType.int64);
+    final inputIds = Tensor.ones([1, 10], dataType: DataType.int64);
     // final inputIds = (Tensor.rand([1, 10]) * config.vocabSize).to(dataType: DataType.int64);
 
     // Create dummy attention mask
@@ -53,6 +53,7 @@ void main() {
       scaleAttnWeights: config.scaleAttnWeights,
       scaleAttnByInverseLayerIdx: config.scaleAttnByInverseLayerIdx,
       reorderAndUpcastAttn: config.reorderAndUpcastAttn,
+      maxPositionEmbeddings: config.maxPositionEmbeddings,
     );
     final context = Context.best();
 

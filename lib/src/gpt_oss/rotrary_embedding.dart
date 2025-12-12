@@ -139,7 +139,7 @@ class GptOssRotaryEmbedding extends Module {
   late final Iterable<Tensor> parameters = [];
 
   @override
-  late final Iterable<Tensor> buffers = [invFreq];
+  late final Iterable<Tensor> nonTrainableParameters = [invFreq];
 
   @override
   late final Iterable<Module> submodules = const [];

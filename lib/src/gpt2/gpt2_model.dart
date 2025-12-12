@@ -130,6 +130,7 @@ class GPT2Model extends Module {
     required bool scaleAttnWeights,
     required bool scaleAttnByInverseLayerIdx,
     required bool reorderAndUpcastAttn,
+    required int maxPositionEmbeddings,
     required int nInner,
     String wteName = 'wte',
     String wpeName = 'wpe',
@@ -165,6 +166,7 @@ class GPT2Model extends Module {
           scaleAttnWeights: scaleAttnWeights,
           scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
           reorderAndUpcastAttn: reorderAndUpcastAttn,
+          maxPositionEmbeddings: maxPositionEmbeddings,
           nInner: nInner,
         ),
       );
@@ -201,6 +203,7 @@ class GPT2Model extends Module {
     required bool scaleAttnWeights,
     required bool scaleAttnByInverseLayerIdx,
     required bool reorderAndUpcastAttn,
+    required int maxPositionEmbeddings,
   }) async {
     final wte = await EmbeddingLayer.loadFromSafeTensor(
       loader,
@@ -231,6 +234,7 @@ class GPT2Model extends Module {
         scaleAttnWeights: scaleAttnWeights,
         scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
         reorderAndUpcastAttn: reorderAndUpcastAttn,
+        maxPositionEmbeddings: maxPositionEmbeddings,
       );
       blocks.add(block);
     }

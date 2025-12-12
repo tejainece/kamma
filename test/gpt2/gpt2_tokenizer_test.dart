@@ -91,7 +91,7 @@ th e
       final text = 'the';
       final tokens = tokenizer.encode(text);
       expect(tokens.shape, [1, 1]);
-      expect(tokens.scalarAt(0), 257);
+      expect(tokens.at([0]).scalar, 257);
     });
 
     test('decode simple tokens', () async {
@@ -107,7 +107,7 @@ th e
       final text = ' the';
       final tokens = tokenizer.encode(text);
       expect(tokens.shape, [1, 1]);
-      expect(tokens.scalarAt(0), 261);
+      expect(tokens.at([0]).scalar, 261);
     });
 
     test('encode unknown chars (byte fallback)', () async {
@@ -123,7 +123,7 @@ th e
       // And our vocab maps those unicode chars to IDs.
       // In setUp, we did: vocab[u] = b;
       // 'z' is byte 122. bytesToUnicode[122] = 'z'. vocab['z'] = 122.
-      expect(tokens.scalarAt(0), 122);
+      expect(tokens.at([0]).scalar, 122);
     });
   });
 }
