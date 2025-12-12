@@ -5,6 +5,7 @@ class GPT2Attention extends Module {
   final int numHeads;
   final bool scaleAttnWeights;
   final bool scaleAttnByInverseLayerIdx;
+  // TODO use cache instead
   final bool reorderAndUpcastAttn;
   final bool isCrossAttention;
   final int layerIdx;
@@ -46,7 +47,7 @@ class GPT2Attention extends Module {
   late final int headDim = embedDim ~/ numHeads;
 
   // TODO use SDAP
-  Tensor _attn(
+  ({Tensor attentionOutput, Tensor attentionWeights}) _attn(
     Tensor query,
     Tensor key,
     Tensor value, {
@@ -57,13 +58,14 @@ class GPT2Attention extends Module {
     final [batchSize, numHeads, qSeqLength, headDim] = query.shape;
     final [_, _, kSeqLength, _] = key.shape;
 
-    // Prealicate attentionWeights. Will be populated by baddbmm
+    // Preallocate attention weights tensor. Will be populated by baddbmm
     Tensor attentionWeights = Tensor.empty(
       [batchSize * numHeads, qSeqLength, kSeqLength],
       datatype: DataType.float32,
       device: context.device,
     );
 
+    // Scale factor for attention weights as descibed in attention formula
     double scaleFactor = 1.0;
     if (scaleAttnWeights) {
       scaleFactor /= sqrt(value.shape.last);
@@ -89,35 +91,54 @@ class GPT2Attention extends Module {
       ]);
     });
 
+    // Apply causal mask. Cross-attention is only performed on encoder-decoder transformer.
+    // For encoder-decoder transformer, causal mask is not applied.
     if (!isCrossAttention) {
       final causalMask = bias.index([
         .all,
         .all,
-        .slice(kSeqLength - qSeqLength),
-        .slice(kSeqLength - qSeqLength),
+        // Mask for query
+        // During inference of decoder-only transformer, only the last token is processed (qSeqLength = 1).
+        // During training of decoder-only transformer, qSeqLength = kSeqLength.
+        .slice(kSeqLength - qSeqLength, kSeqLength),
+        // Mask for key
+        .to(kSeqLength),
       ]);
-      // TODO
+      attentionWeights = causalMask.where(
+        attentionWeights,
+        attentionWeights.dataType.fInfo.min,
+      );
     }
 
     if (reorderAndUpcastAttn) {
       // TODO: Implement reorder and upcast if needed, usually for mixed precision
     }
 
-    /* TODO
     if (attentionMask != null) {
-      attnWeights = attnWeights + attentionMask;
+      attentionWeights = attentionWeights + attentionMask;
     }
 
-    attnWeights = attnWeights.softmax(-1);
-    attnWeights = attnDropout.forward(attnWeights, context: context);
+    attentionWeights = attentionWeights.softmax(-1);
+
+    if (!attentionWeights.isFloat32) {
+      throw Exception(
+        "Error upcasting! Expected float32, got ${attentionWeights.dataType}",
+      );
+    }
+    attentionWeights = attentionWeights.to(dataType: value.dataType);
+    attentionWeights = attnDropout.forward(attentionWeights, context: context);
 
     if (headMask != null) {
-      attnWeights = attnWeights * headMask;
+      attentionWeights = attentionWeights * headMask;
     }
-    */
 
-    Tensor attnOutput = attentionWeights.matmul(value);
-    return attnOutput;
+    Tensor attentionOutput = attentionWeights.matmul(value);
+    attentionOutput = attentionOutput.transpose(1, 2);
+
+    return (
+      attentionOutput: attentionOutput,
+      attentionWeights: attentionWeights,
+    );
   }
 
   /// [tensor] is of shape (batch, seq_length, embed_dim). embed_dim consists of multiple heads([numHeads])
@@ -148,9 +169,8 @@ class GPT2Attention extends Module {
     return tensor.view(newShape);
   }
 
-  @override
   /// [input] is of size (batch, seq_length, embed_dim)
-  Tensor forward(
+  ({Tensor attentionOutput, Tensor attentionWeights}) forward(
     Tensor input, {
     Tensor? layerPast,
     Tensor? attentionMask,
@@ -198,7 +218,7 @@ class GPT2Attention extends Module {
       present = Tensor.cat([key.unsqueeze(0), value.unsqueeze(0)], dim: 0);
     }
 
-    Tensor attnOutput = _attn(
+    var (:attentionOutput, :attentionWeights) = _attn(
       query,
       key,
       value,
@@ -207,12 +227,15 @@ class GPT2Attention extends Module {
       context: context,
     );
 
-    attnOutput = _mergeHeads(attnOutput, numHeads, headDim);
-    attnOutput = cProj.forward(attnOutput, context: context);
-    attnOutput = residDropout.forward(attnOutput, context: context);
+    attentionOutput = _mergeHeads(attentionOutput, numHeads, headDim);
+    attentionOutput = cProj.forward(attentionOutput, context: context);
+    attentionOutput = residDropout.forward(attentionOutput, context: context);
 
     // TODO: Return present and attentions if needed
-    return attnOutput;
+    return (
+      attentionOutput: attentionOutput,
+      attentionWeights: attentionWeights,
+    );
   }
 
   @override
