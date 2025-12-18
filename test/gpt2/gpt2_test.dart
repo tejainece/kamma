@@ -50,9 +50,7 @@ void main() {
       attentionDropoutProbability: config.attnPdrop,
       residualDropoutProbability: config.residPdrop,
       isCrossAttention: false,
-      scaleAttnWeights: config.scaleAttnWeights,
       scaleAttnByInverseLayerIdx: config.scaleAttnByInverseLayerIdx,
-      reorderAndUpcastAttn: config.reorderAndUpcastAttn,
       maxPositionEmbeddings: config.maxPositionEmbeddings,
     );
     final context = Context.best();
@@ -63,7 +61,17 @@ void main() {
 
     final output = attention.forward(hiddenStates, context: context);
 
-    expect(output.shape, [batchSize, seqLength, config.embedDim]);
+    expect(output.attentionOutput.shape, [
+      batchSize,
+      seqLength,
+      config.embedDim,
+    ]);
+    expect(output.attentionWeights.shape, [
+      batchSize,
+      config.nHead,
+      seqLength,
+      seqLength,
+    ]);
   });
 
   test('GPT2MLP forward pass', () {

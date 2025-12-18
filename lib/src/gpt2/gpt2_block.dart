@@ -31,9 +31,8 @@ class GPT2Block extends Module implements SimpleModule {
     Tensor residual = hiddenStates;
     hiddenStates = ln1.forward(hiddenStates, context: context);
 
-    Tensor attnOutput = attn.forward(
+    final (:attentionOutput, :attentionWeights) = attn.forward(
       hiddenStates,
-      layerPast: layerPast,
       attentionMask: attentionMask,
       headMask: headMask,
       encoderHiddenStates: encoderHiddenStates,
@@ -46,7 +45,7 @@ class GPT2Block extends Module implements SimpleModule {
     // TODO: Handle attnOutput being a tuple if useCache or outputAttentions is true
     // For now assuming it returns just the attention output tensor
 
-    hiddenStates = attnOutput + residual;
+    hiddenStates = attentionOutput + residual;
 
     residual = hiddenStates;
     hiddenStates = ln2.forward(hiddenStates, context: context);
@@ -83,9 +82,7 @@ class GPT2Block extends Module implements SimpleModule {
     String preLayerNormName = 'ln_1',
     String postLayerNormName = 'ln_2',
     String mlpName = 'mlp',
-    required bool scaleAttnWeights,
     required bool scaleAttnByInverseLayerIdx,
-    required bool reorderAndUpcastAttn,
     required int nInner,
     required double attentionDropoutProbability,
     required double residualDropoutProbability,
@@ -106,9 +103,7 @@ class GPT2Block extends Module implements SimpleModule {
       attentionDropoutProbability: attentionDropoutProbability,
       residualDropoutProbability: residualDropoutProbability,
       isCrossAttention: isCrossAttention,
-      scaleAttnWeights: scaleAttnWeights,
       scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
-      reorderAndUpcastAttn: reorderAndUpcastAttn,
       maxPositionEmbeddings: maxPositionEmbeddings,
     );
 
@@ -142,9 +137,7 @@ class GPT2Block extends Module implements SimpleModule {
     required int numHeads,
     required bool isCrossAttention,
     required int layerIdx,
-    required bool scaleAttnWeights,
     required bool scaleAttnByInverseLayerIdx,
-    required bool reorderAndUpcastAttn,
     required int maxPositionEmbeddings,
   }) async {
     final attn = await GPT2Attention.loadFromSafeTensor(
@@ -156,9 +149,7 @@ class GPT2Block extends Module implements SimpleModule {
       isCrossAttention: isCrossAttention,
       numHeads: numHeads,
       layerIdx: layerIdx,
-      scaleAttnWeights: scaleAttnWeights,
       scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
-      reorderAndUpcastAttn: reorderAndUpcastAttn,
       maxPositionEmbeddings: maxPositionEmbeddings,
     );
     final embedDim = attn.embedDim;

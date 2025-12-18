@@ -16,7 +16,6 @@ class GPT2Model extends Module {
     required this.lnF,
   }) : assert(wte.embeddingDim == wpe.embeddingDim);
 
-  @override
   Tensor forward(
     Tensor inputIds, {
     Tensor? pastKeyValues,
@@ -163,9 +162,7 @@ class GPT2Model extends Module {
           numHeads: numHeads,
           layerNormEpsilon: layerNormEpsilon,
           isCrossAttention: isCrossAttention,
-          scaleAttnWeights: scaleAttnWeights,
           scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
-          reorderAndUpcastAttn: reorderAndUpcastAttn,
           maxPositionEmbeddings: maxPositionEmbeddings,
           nInner: nInner,
         ),
@@ -231,9 +228,7 @@ class GPT2Model extends Module {
         numHeads: numHeads,
         isCrossAttention: false, // Default for now
         layerIdx: i,
-        scaleAttnWeights: scaleAttnWeights,
         scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
-        reorderAndUpcastAttn: reorderAndUpcastAttn,
         maxPositionEmbeddings: maxPositionEmbeddings,
       );
       blocks.add(block);
