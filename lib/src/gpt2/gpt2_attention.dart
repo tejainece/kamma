@@ -96,13 +96,15 @@ class GPT2Attention extends Module {
   }
 
   /// [input] is of size (batch, seq_length, embed_dim)
+  /// [attentionMask] is used to mask out certain positions in the sequence. For example, to mask
+  /// out padding tokens. It is of shape (batch, 1, 1, seq_length).
+  /// [headMask] is used to mask out certain heads in the attention.
   ({Tensor attentionOutput, Tensor attentionWeights}) forward(
     Tensor input, {
+    // TODO implement cachePosition
     Tensor? attentionMask,
     Tensor? headMask,
     Tensor? encoderHiddenStates,
-    Tensor? encoderAttentionMask,
-    bool useCache = false,
     bool outputAttentions = false,
     required Context context,
   }) {
@@ -138,11 +140,11 @@ class GPT2Attention extends Module {
       value = _splitHeads(splitQkv[2], numHeads, headDim);
     }
 
-    if (keyValueCache != null) {
+    if (!context.isTraining) {
       // TODO implement cache_position (updating specific position in cache instead of at the end)
-      keyValueCache!.update(newKey: key, newValue: value);
-      key = keyValueCache!.key;
-      value = keyValueCache!.value;
+      keyValueCache.update(newKey: key, newValue: value);
+      key = keyValueCache.key;
+      value = keyValueCache.value;
     }
 
     var (:attentionOutput, :attentionWeights) = attentionMethod.perform(

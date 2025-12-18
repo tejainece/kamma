@@ -25,8 +25,6 @@ class GPT2Model extends Module {
     Tensor? headMask,
     Tensor? inputsEmbeds,
     Tensor? encoderHiddenStates,
-    Tensor? encoderAttentionMask,
-    bool useCache = false,
     bool outputAttentions = false,
     bool outputHiddenStates = false,
     required Context context,
@@ -72,8 +70,6 @@ class GPT2Model extends Module {
         attentionMask: attentionMask,
         headMask: headMask, // TODO: split head mask per layer
         encoderHiddenStates: encoderHiddenStates,
-        encoderAttentionMask: encoderAttentionMask,
-        useCache: useCache,
         outputAttentions: outputAttentions,
         context: context,
       );

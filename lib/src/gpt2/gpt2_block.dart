@@ -21,8 +21,6 @@ class GPT2Block extends Module implements SimpleModule {
     Tensor? attentionMask,
     Tensor? headMask,
     Tensor? encoderHiddenStates,
-    Tensor? encoderAttentionMask,
-    bool useCache = false,
     bool outputAttentions = false,
     required Context context,
   }) {
@@ -36,8 +34,6 @@ class GPT2Block extends Module implements SimpleModule {
       attentionMask: attentionMask,
       headMask: headMask,
       encoderHiddenStates: encoderHiddenStates,
-      encoderAttentionMask: encoderAttentionMask,
-      useCache: useCache,
       outputAttentions: outputAttentions,
       context: context,
     );

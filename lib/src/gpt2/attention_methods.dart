@@ -26,6 +26,9 @@ abstract class GPT2AttentionMethod implements Module {
     Tensor query,
     Tensor key,
     Tensor value, {
+
+    /// [attentionMask] is used to mask out certain positions in the sequence. For example, to mask
+    /// out padding tokens. It is of shape (batch, 1, 1, seq_length).
     Tensor? attentionMask,
     Tensor? headMask,
     required Context context,
@@ -141,6 +144,9 @@ class GPT2AttentionMethodEagerUpscale extends Module
     Tensor query,
     Tensor key,
     Tensor value, {
+
+    /// [attentionMask] is used to mask out certain positions in the sequence. For example, to mask
+    /// out padding tokens. It is of shape (batch, 1, 1, seq_length).
     Tensor? attentionMask,
     Tensor? headMask,
     required Context context,
