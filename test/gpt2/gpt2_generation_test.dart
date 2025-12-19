@@ -12,7 +12,7 @@ class MockTokenizer {
 
   Tensor encode(String text) {
     final tokens = text.split(' ').map((w) => vocab[w] ?? 0).toList();
-    return Tensor.from(tokens, [1, tokens.length], datatype: DataType.int64);
+    return Tensor.from(tokens, [1, tokens.length], dataType: DataType.int64);
   }
 
   String decode(Tensor tokens) {

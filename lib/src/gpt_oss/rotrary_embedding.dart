@@ -32,7 +32,7 @@ class GptOssRotaryEmbedding extends Module {
     // Create t on correct device to avoid mismatch with invFreq
     final t = Tensor.from(tList, [
       seqLen,
-    ], datatype: DataType.float32).to(device: invFreq.device);
+    ], dataType: DataType.float32).to(device: invFreq.device);
 
     // freqs = outer(t, inv_freq)
     // t: [seq], invFreq: [dim/2]

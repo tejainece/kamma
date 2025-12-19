@@ -61,7 +61,7 @@ void main() {
 
     final output = attention.forward(hiddenStates, context: context);
 
-    expect(output.attentionOutput.shape, [
+    expect(output.outputEmbeddings.shape, [
       batchSize,
       seqLength,
       config.embedDim,
@@ -75,10 +75,10 @@ void main() {
   });
 
   test('GPT2MLP forward pass', () {
-    final config = GPT2Config(embedDim: 32, nInner: 64);
+    final config = GPT2Config(embedDim: 32, mlpInnerDim: 64);
     final mlp = GPT2MLP.make(
       embedDim: config.embedDim,
-      nInner: config.nInner,
+      mlpInnerDim: config.mlpInnerDim,
       residualDropoutProbability: config.residPdrop,
       name: 'mlp',
     );

@@ -96,7 +96,7 @@ th e
 
     test('decode simple tokens', () async {
       final tokenizer = await GPT2Tokenizer.fromPretrained(tempDir.path);
-      final tokens = Tensor.from([257], [1, 1], datatype: DataType.int64);
+      final tokens = Tensor.from([257], [1, 1], dataType: DataType.int64);
       final text = tokenizer.decode(tokens);
       expect(text, 'the');
     });

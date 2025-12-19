@@ -278,7 +278,7 @@ class DecisionTransformerModel extends Module {
           residualDropoutProbability: config.residPdrop,
           isCrossAttention: false,
           scaleAttnByInverseLayerIdx: config.scaleAttnByInverseLayerIdx,
-          nInner: config.nInner,
+          mlpInnerDim: config.mlpInnerDim,
           maxPositionEmbeddings: config.maxPositionEmbeddings,
         ),
       );

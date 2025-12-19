@@ -151,6 +151,8 @@ class GPT2AttentionMethodEagerUpscale extends Module
     Tensor? headMask,
     required Context context,
   }) {
+    context.onloadModule(this);
+
     final [batchSize, numHeads, qSeqLength, headDim] = query.shape;
     final [_, _, kSeqLength, _] = key.shape;
 
@@ -180,7 +182,7 @@ class GPT2AttentionMethodEagerUpscale extends Module
 
     // Apply causal mask. Cross-attention is only performed on encoder-decoder transformer.
     // For encoder-decoder transformer, causal mask is not applied.
-    if (!isCausal) {
+    if (isCausal) {
       final causalMask = premadeCausalMask.index([
         // Calculate for all batches
         .all,
@@ -193,8 +195,9 @@ class GPT2AttentionMethodEagerUpscale extends Module
         // Mask for key
         .to(kSeqLength),
       ]);
-      attentionWeights = causalMask.where(
-        attentionWeights,
+      // mask is 1 where we want to keep, 0 where we want to mask
+      attentionWeights = attentionWeights.maskedFill(
+        causalMask.eq(0),
         attentionWeights.dataType.fInfo.min,
       );
     }
@@ -278,27 +281,34 @@ class GPT2AttentionMethodEager extends Module implements GPT2AttentionMethod {
     Tensor? headMask,
     required Context context,
   }) {
+    context.onloadModule(this);
+
     final [batchSize, numHeads, qSeqLength, headDim] = query.shape;
     final [_, _, kSeqLength, _] = key.shape;
 
     Tensor attentionWeights = query.matmul(key.transpose(-1, -2));
     attentionWeights = attentionWeights * scaleFactor;
 
-    if (!isCausal) {
-      final causalMask = premadeCausalMask.index([
-        // Calculate for all batches
-        .all,
-        // Calculate for all heads
-        .all,
-        // Mask for query
-        // During inference of decoder-only transformer, only the last token is processed (qSeqLength = 1).
-        // During training of decoder-only transformer, qSeqLength = kSeqLength.
-        .slice(kSeqLength - qSeqLength, kSeqLength),
-        // Mask for key
-        .to(kSeqLength),
-      ]);
-      attentionWeights = causalMask.where(
-        attentionWeights,
+    if (isCausal) {
+      final causalMask = premadeCausalMask
+          .index([
+            // Calculate for all batches
+            .all,
+            // Calculate for all heads
+            .all,
+            // Mask for query
+            // During inference of decoder-only transformer, only the last token is processed (qSeqLength = 1).
+            // During training of decoder-only transformer, qSeqLength = kSeqLength.
+            .slice(kSeqLength - qSeqLength, kSeqLength),
+            // Mask for key
+            .to(kSeqLength),
+          ])
+          .to(device: context.device);
+      // mask is 1 where we want to keep, 0 where we want to mask
+      // maskedFill fills where mask is 1 (True).
+      // So we want to fill where causalMask is 0.
+      attentionWeights = attentionWeights.maskedFill(
+        causalMask.bitwiseNot(),
         attentionWeights.dataType.fInfo.min,
       );
     }

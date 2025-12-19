@@ -243,7 +243,7 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
       scaleAttnWeights: config.scaleAttnWeights,
       scaleAttnByInverseLayerIdx: config.scaleAttnByInverseLayerIdx,
       reorderAndUpcastAttn: config.reorderAndUpcastAttn,
-      nInner: config.nInner,
+      mlpInnerDim: config.mlpInnerDim,
       maxPositionEmbeddings: config.maxPositionEmbeddings,
     );
 

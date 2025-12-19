@@ -29,7 +29,9 @@ class GPT2Block extends Module implements SimpleModule {
     Tensor residual = hiddenStates;
     hiddenStates = ln1.forward(hiddenStates, context: context);
 
-    final (:attentionOutput, :attentionWeights) = attn.forward(
+    // TODO setup keyValueCache
+    // TODO use attentionWeights
+    final (:outputEmbeddings, :attentionWeights) = attn.forward(
       hiddenStates,
       attentionMask: attentionMask,
       headMask: headMask,
@@ -41,7 +43,7 @@ class GPT2Block extends Module implements SimpleModule {
     // TODO: Handle attnOutput being a tuple if useCache or outputAttentions is true
     // For now assuming it returns just the attention output tensor
 
-    hiddenStates = attentionOutput + residual;
+    hiddenStates = outputEmbeddings + residual;
 
     residual = hiddenStates;
     hiddenStates = ln2.forward(hiddenStates, context: context);
@@ -79,7 +81,7 @@ class GPT2Block extends Module implements SimpleModule {
     String postLayerNormName = 'ln_2',
     String mlpName = 'mlp',
     required bool scaleAttnByInverseLayerIdx,
-    required int nInner,
+    required int mlpInnerDim,
     required double attentionDropoutProbability,
     required double residualDropoutProbability,
     required bool isCrossAttention,
@@ -112,7 +114,7 @@ class GPT2Block extends Module implements SimpleModule {
     final mlp = GPT2MLP.make(
       name: 'mlp',
       embedDim: embedDim,
-      nInner: nInner,
+      mlpInnerDim: mlpInnerDim,
       residualDropoutProbability: residualDropoutProbability,
     );
 

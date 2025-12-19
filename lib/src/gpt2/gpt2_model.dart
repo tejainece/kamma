@@ -126,7 +126,7 @@ class GPT2Model extends Module {
     required bool scaleAttnByInverseLayerIdx,
     required bool reorderAndUpcastAttn,
     required int maxPositionEmbeddings,
-    required int nInner,
+    required int mlpInnerDim,
     String wteName = 'wte',
     String wpeName = 'wpe',
     String lnFName = 'ln_f',
@@ -160,7 +160,7 @@ class GPT2Model extends Module {
           isCrossAttention: isCrossAttention,
           scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
           maxPositionEmbeddings: maxPositionEmbeddings,
-          nInner: nInner,
+          mlpInnerDim: mlpInnerDim,
         ),
       );
     }

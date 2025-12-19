@@ -4,7 +4,7 @@ class GPT2Config {
   final int embedDim;
   final int nLayer;
   final int nHead;
-  final int nInner;
+  final int mlpInnerDim;
   final double
   activationFunction; // Not used directly, but kept for compatibility
   final double residPdrop;
@@ -23,7 +23,7 @@ class GPT2Config {
     this.embedDim = 768,
     this.nLayer = 12,
     this.nHead = 12,
-    this.nInner = 0, // 0 means nEmbd * 4
+    this.mlpInnerDim = 0, // 0 means nEmbd * 4
     this.activationFunction = 0.0, // Placeholder
     this.residPdrop = 0.1,
     this.embdPdrop = 0.1,
@@ -43,7 +43,7 @@ class GPT2Config {
       embedDim: json['n_embd'] ?? 768,
       nLayer: json['n_layer'] ?? 12,
       nHead: json['n_head'] ?? 12,
-      nInner: json['n_inner'] ?? 0,
+      mlpInnerDim: json['n_inner'] ?? 0,
       residPdrop: (json['resid_pdrop'] ?? 0.1).toDouble(),
       embdPdrop: (json['embd_pdrop'] ?? 0.1).toDouble(),
       attnPdrop: (json['attn_pdrop'] ?? 0.1).toDouble(),

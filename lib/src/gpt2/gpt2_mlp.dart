@@ -28,6 +28,8 @@ class GPT2MLP extends Module implements SimpleModule {
 
   int get embedDim => cFc.inFeatures;
 
+  int get innerDim => cFc.outFeatures;
+
   @override
   void resetParameters() {
     cFc.resetParameters();
@@ -46,20 +48,22 @@ class GPT2MLP extends Module implements SimpleModule {
   static GPT2MLP make({
     required String name,
     required int embedDim,
-    required int nInner,
+    required int? mlpInnerDim,
     required double residualDropoutProbability,
+    String cFcName = 'c_fc',
+    String cProjName = 'c_proj',
   }) {
-    final innerDim = nInner > 0 ? nInner : 4 * embedDim;
+    mlpInnerDim ??= 4 * embedDim;
 
     final cFc = LinearLayer.make(
-      name: 'c_fc',
+      name: cFcName,
       inFeatures: embedDim,
-      outFeatures: innerDim,
+      outFeatures: mlpInnerDim,
     );
 
     final cProj = LinearLayer.make(
-      name: 'c_proj',
-      inFeatures: innerDim,
+      name: cProjName,
+      inFeatures: mlpInnerDim,
       outFeatures: embedDim,
     );
 
@@ -75,25 +79,22 @@ class GPT2MLP extends Module implements SimpleModule {
     );
   }
 
-  static Activation _makeActivation() {
-    // TODO: Handle different activation functions from config if needed
-    return Activation.gelu;
-  }
-
   static Future<GPT2MLP> loadFromSafeTensor(
     SafeTensorLoader loader, {
     required String prefix,
     required String name,
     required double residualDropoutProbability,
+    String cFcName = 'c_fc',
+    String cProjName = 'c_proj',
   }) async {
     final cFc = await LinearLayer.loadFromSafeTensor(
       loader,
-      prefix: '${prefix}c_fc.',
+      prefix: '$prefix$cFcName.',
     );
 
     final cProj = await LinearLayer.loadFromSafeTensor(
       loader,
-      prefix: '${prefix}c_proj.',
+      prefix: '$prefix$cProjName.',
     );
 
     final dropout = Dropout(residualDropoutProbability);
@@ -105,5 +106,10 @@ class GPT2MLP extends Module implements SimpleModule {
       act: _makeActivation(),
       dropout: dropout,
     );
+  }
+
+  static Activation _makeActivation() {
+    // TODO: Handle different activation functions from config if needed
+    return Activation.gelu;
   }
 }

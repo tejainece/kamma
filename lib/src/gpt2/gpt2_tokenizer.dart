@@ -180,7 +180,7 @@ class GPT2Tokenizer {
     return Tensor.from(bpeTokens, [
       1,
       bpeTokens.length,
-    ], datatype: DataType.int64);
+    ], dataType: DataType.int64);
   }
 
   String decode(Tensor tokens) {

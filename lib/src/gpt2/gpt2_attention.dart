@@ -95,12 +95,12 @@ class GPT2Attention extends Module {
     return tensor.view(newShape);
   }
 
-  /// [input] is of size (batch, seq_length, embed_dim)
+  /// [inputEmbeddings] is of size (batch, seq_length, embed_dim)
   /// [attentionMask] is used to mask out certain positions in the sequence. For example, to mask
   /// out padding tokens. It is of shape (batch, 1, 1, seq_length).
   /// [headMask] is used to mask out certain heads in the attention.
-  ({Tensor attentionOutput, Tensor attentionWeights}) forward(
-    Tensor input, {
+  ({Tensor outputEmbeddings, Tensor attentionWeights}) forward(
+    Tensor inputEmbeddings, {
     // TODO implement cachePosition
     Tensor? attentionMask,
     Tensor? headMask,
@@ -121,7 +121,7 @@ class GPT2Attention extends Module {
         encoderHiddenStates != null,
         "encoder_hidden_states must be provided for cross attention",
       );
-      query = qkvAttention.forward(input, context: context);
+      query = qkvAttention.forward(inputEmbeddings, context: context);
       query = _splitHeads(query, numHeads, headDim);
 
       // TODO use keyValueCache
@@ -133,7 +133,7 @@ class GPT2Attention extends Module {
       key = _splitHeads(splitKeyVal[0], numHeads, headDim);
       value = _splitHeads(splitKeyVal[1], numHeads, headDim);
     } else {
-      final qkv = qkvAttention.forward(input, context: context);
+      final qkv = qkvAttention.forward(inputEmbeddings, context: context);
       final splitQkv = qkv.splitEqually(splitSize, dim: 2);
       query = _splitHeads(splitQkv[0], numHeads, headDim);
       key = _splitHeads(splitQkv[1], numHeads, headDim);
@@ -167,7 +167,7 @@ class GPT2Attention extends Module {
     );
 
     return (
-      attentionOutput: attentionOutput,
+      outputEmbeddings: attentionOutput,
       attentionWeights: attentionWeights,
     );
   }
@@ -255,7 +255,7 @@ class GPT2Attention extends Module {
     required int layerIdx,
     required double attentionDropoutProbability,
     required double residualDropoutProbability,
-    required bool isCrossAttention,
+    bool isCrossAttention = false,
     required int numHeads,
     String qkvAttentionName = 'c_attn',
     String outputProjectionName = 'c_proj',
@@ -309,8 +309,13 @@ class AttentionCache {
 
   /// [newKey] and [newValue] are of shape [batchSize, numHeads, seqLength, headDim]
   void update({required Tensor newKey, required Tensor newValue}) {
-    _key = Tensor.cat([_key, newKey], dim: -2);
-    _value = Tensor.cat([_value, newValue], dim: -2);
+    if (_key.numel == 0) {
+      _key = newKey;
+      _value = newValue;
+    } else {
+      _key = Tensor.cat([_key, newKey], dim: -2);
+      _value = Tensor.cat([_value, newValue], dim: -2);
+    }
   }
 
   Tensor get key => _key;

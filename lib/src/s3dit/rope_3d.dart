@@ -36,7 +36,7 @@ class RoPE3D {
       final double freq = 1.0 / pow(theta, (2.0 * i) / dimSize);
       freqs.add(freq);
     }
-    return Tensor.from(freqs, [freqs.length], datatype: DataType.float32);
+    return Tensor.from(freqs, [freqs.length], dataType: DataType.float32);
   }
 
   /// Apply 3D rotary position embedding to query or key tensors
@@ -157,10 +157,10 @@ class RoPE3D {
 
     Tensor posX = Tensor.from(posXList, [
       height * width,
-    ], datatype: DataType.int64);
+    ], dataType: DataType.int64);
     Tensor posY = Tensor.from(posYList, [
       height * width,
-    ], datatype: DataType.int64);
+    ], dataType: DataType.int64);
 
     if (batchSize > 1) {
       posX = posX.unsqueeze(0).expand([batchSize, height * width]);

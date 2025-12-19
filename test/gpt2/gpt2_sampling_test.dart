@@ -7,7 +7,7 @@ void main() {
       final t = Tensor.from(
         [1.0, 5.0, 2.0, 8.0, 3.0],
         [5],
-        datatype: DataType.float64,
+        dataType: DataType.float64,
       );
       final (values, indices) = t.topk(3);
 
@@ -25,7 +25,7 @@ void main() {
       final t = Tensor.from(
         [1.0, 5.0, 2.0, 8.0, 3.0],
         [5],
-        datatype: DataType.float64,
+        dataType: DataType.float64,
       );
       final (values, indices) = t.sort(descending: true);
 
@@ -37,7 +37,7 @@ void main() {
       final t = Tensor.from(
         [1.0, 2.0, 3.0, 4.0],
         [4],
-        datatype: DataType.float64,
+        dataType: DataType.float64,
       );
       final result = t.cumsum(0);
 
@@ -48,7 +48,7 @@ void main() {
       final weights = Tensor.from(
         [0.0, 10.0, 0.0, 0.0],
         [4],
-        datatype: DataType.float64,
+        dataType: DataType.float64,
       ); // Only index 1 has probability
       final result = weights.multinomial(5, replacement: true);
 
