@@ -2,14 +2,19 @@ class GPT2Config {
   final int vocabSize;
   final int nPositions;
   final int embedDim;
-  final int nLayer;
-  final int nHead;
-  final int mlpInnerDim;
-  final double
-  activationFunction; // Not used directly, but kept for compatibility
-  final double residPdrop;
-  final double embdPdrop;
-  final double attnPdrop;
+
+  /// Number of attention layers serially connected to enrich the context-aware embeddings
+  final int numLayers;
+
+  /// Number of heads in attention
+  final int numHeads;
+
+  /// Number of inner dimensions in the feed-forward network
+  final int? mlpInnerDim;
+  final String activationFunction;
+  final double residualDropoutProbability;
+  final double embedDropoutProbability;
+  final double attentionDropoutProbability;
   final double layerNormEpsilon;
   final bool scaleAttnWeights;
   final bool scaleAttnByInverseLayerIdx;
@@ -21,13 +26,13 @@ class GPT2Config {
     this.vocabSize = 50257,
     this.nPositions = 1024,
     this.embedDim = 768,
-    this.nLayer = 12,
-    this.nHead = 12,
-    this.mlpInnerDim = 0, // 0 means nEmbd * 4
-    this.activationFunction = 0.0, // Placeholder
-    this.residPdrop = 0.1,
-    this.embdPdrop = 0.1,
-    this.attnPdrop = 0.1,
+    this.numLayers = 12,
+    this.numHeads = 12,
+    this.mlpInnerDim,
+    this.activationFunction = "gelu_new",
+    this.residualDropoutProbability = 0.1,
+    this.embedDropoutProbability = 0.1,
+    this.attentionDropoutProbability = 0.1,
     this.layerNormEpsilon = 1e-5,
     this.scaleAttnWeights = true,
     this.scaleAttnByInverseLayerIdx = false,
@@ -41,12 +46,13 @@ class GPT2Config {
       vocabSize: json['vocab_size'] ?? 50257,
       nPositions: json['n_positions'] ?? 1024,
       embedDim: json['n_embd'] ?? 768,
-      nLayer: json['n_layer'] ?? 12,
-      nHead: json['n_head'] ?? 12,
-      mlpInnerDim: json['n_inner'] ?? 0,
-      residPdrop: (json['resid_pdrop'] ?? 0.1).toDouble(),
-      embdPdrop: (json['embd_pdrop'] ?? 0.1).toDouble(),
-      attnPdrop: (json['attn_pdrop'] ?? 0.1).toDouble(),
+      numLayers: json['n_layer'] ?? 12,
+      numHeads: json['n_head'] ?? 12,
+      mlpInnerDim: json['n_inner'],
+      activationFunction: json['activation_function'] ?? "gelu_new",
+      residualDropoutProbability: (json['resid_pdrop'] ?? 0.1).toDouble(),
+      embedDropoutProbability: (json['embd_pdrop'] ?? 0.1).toDouble(),
+      attentionDropoutProbability: (json['attn_pdrop'] ?? 0.1).toDouble(),
       layerNormEpsilon: (json['layer_norm_epsilon'] ?? 1e-5).toDouble(),
       scaleAttnWeights: json['scale_attn_weights'] ?? true,
       scaleAttnByInverseLayerIdx:

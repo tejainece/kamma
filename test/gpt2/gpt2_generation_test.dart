@@ -57,8 +57,8 @@ void main() {
         vocabSize: words.length,
         nPositions: 20,
         embedDim: 32,
-        nLayer: 2,
-        nHead: 4,
+        numLayers: 2,
+        numHeads: 4,
       );
 
       model = GPT2LMHeadModel.make(config: config, name: 'gpt2');

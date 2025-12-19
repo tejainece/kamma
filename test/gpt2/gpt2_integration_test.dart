@@ -61,8 +61,8 @@ void main() {
       final config = GPT2Config(
         vocabSize: 1000, // Make sure this is larger than our max vocab ID
         embedDim: 32,
-        nLayer: 2,
-        nHead: 2,
+        numLayers: 2,
+        numHeads: 2,
         nPositions: 128,
       );
       model = GPT2LMHeadModel.make(config: config, name: 'gpt2');
@@ -89,8 +89,8 @@ void main() {
         final config = GPT2Config(
           vocabSize: 50257,
           embedDim: 768,
-          nLayer: 12,
-          nHead: 12,
+          numLayers: 12,
+          numHeads: 12,
           nPositions: 1024,
         );
         // model = GPT2LMHeadModel.make(config: config, name: 'gpt2');
@@ -100,15 +100,7 @@ void main() {
           loader,
           prefix: '',
           name: 'gpt2',
-          embedDropoutProbability: config.embdPdrop,
-          attentionDropoutProbability: config.attnPdrop,
-          residualDropoutProbability: config.residPdrop,
-          layerNormEpsilon: config.layerNormEpsilon,
-          numHeads: config.nHead,
-          scaleAttnWeights: config.scaleAttnWeights,
-          scaleAttnByInverseLayerIdx: config.scaleAttnByInverseLayerIdx,
-          reorderAndUpcastAttn: config.reorderAndUpcastAttn,
-          maxPositionEmbeddings: config.maxPositionEmbeddings,
+          config: config,
         );
       } else {
         print('Weights not found, using random weights and dummy vocab');

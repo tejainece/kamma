@@ -12,7 +12,7 @@ class GptOssForCausalLM extends Module implements SimpleModule {
 
   @override
   Tensor forward(
-    Tensor inputIds, {
+    Tensor embeddings, {
     Tensor? pastKeyValues,
     Tensor? attentionMask,
     Tensor? tokenTypeIds,
@@ -30,7 +30,7 @@ class GptOssForCausalLM extends Module implements SimpleModule {
     context.onloadModule(this);
 
     Tensor hiddenStates = transformer.forward(
-      inputIds,
+      embeddings,
       pastKeyValues: pastKeyValues,
       attentionMask: attentionMask,
       tokenTypeIds: tokenTypeIds,

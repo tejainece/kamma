@@ -119,11 +119,19 @@ class ClipEncoder extends Module implements SimpleModule {
   ClipEncoder({required super.name, required this.layers});
 
   @override
-  Tensor forward(Tensor x, {Tensor? attentionMask, required Context context}) {
+  Tensor forward(
+    Tensor embeddings, {
+    Tensor? attentionMask,
+    required Context context,
+  }) {
     for (final layer in layers) {
-      x = layer.forward(x, attentionMask: attentionMask, context: context);
+      embeddings = layer.forward(
+        embeddings,
+        attentionMask: attentionMask,
+        context: context,
+      );
     }
-    return x;
+    return embeddings;
   }
 
   @override
@@ -182,21 +190,25 @@ class ClipEncoderLayer extends Module implements SimpleModule {
   });
 
   @override
-  Tensor forward(Tensor x, {Tensor? attentionMask, required Context context}) {
-    Tensor residual = x;
-    x = layerNorm1.forward(x, context: context);
-    (x, _) = selfAttention.forward(
-      x,
+  Tensor forward(
+    Tensor embeddings, {
+    Tensor? attentionMask,
+    required Context context,
+  }) {
+    Tensor residual = embeddings;
+    embeddings = layerNorm1.forward(embeddings, context: context);
+    (embeddings, _) = selfAttention.forward(
+      embeddings,
       attentionMask: attentionMask,
       context: context,
     );
-    x = residual + x;
+    embeddings = residual + embeddings;
 
-    residual = x;
-    x = layerNorm2.forward(x, context: context);
-    x = mlp.forward(x, context: context);
-    x = residual + x;
-    return x;
+    residual = embeddings;
+    embeddings = layerNorm2.forward(embeddings, context: context);
+    embeddings = mlp.forward(embeddings, context: context);
+    embeddings = residual + embeddings;
+    return embeddings;
   }
 
   @override
@@ -291,11 +303,11 @@ class ClipMlp extends Module implements SimpleModule {
   });
 
   @override
-  Tensor forward(Tensor x, {required Context context}) {
-    x = linear1.forward(x, context: context);
-    x = activation.forward(x, context: context);
-    x = linear2.forward(x, context: context);
-    return x;
+  Tensor forward(Tensor embeddings, {required Context context}) {
+    embeddings = linear1.forward(embeddings, context: context);
+    embeddings = activation.forward(embeddings, context: context);
+    embeddings = linear2.forward(embeddings, context: context);
+    return embeddings;
   }
 
   @override
@@ -355,11 +367,11 @@ class ClipTextEmbeddings extends Module implements SimpleModule {
 
   @override
   Tensor forward(
-    Tensor inputIds, {
+    Tensor embeddings, {
     Tensor? positionIds,
     required Context context,
   }) {
-    final seqLength = inputIds.shape.last;
+    final seqLength = embeddings.shape.last;
     if (seqLength > maxPositionEmbeddings) {
       throw ArgumentError.value(
         'Input sequence length is greater than the maximum position embeddings',
@@ -370,7 +382,7 @@ class ClipTextEmbeddings extends Module implements SimpleModule {
       positionIds,
       context: context,
     );
-    return tokenEmbedding.forward(inputIds, context: context) +
+    return tokenEmbedding.forward(embeddings, context: context) +
         positionEmbeddings;
   }
 

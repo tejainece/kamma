@@ -2,21 +2,21 @@ import 'package:kamma/kamma.dart';
 
 class GPT2Block extends Module implements SimpleModule {
   final LayerNorm ln1;
-  final GPT2Attention attn;
+  final GPT2Attention attention;
   final LayerNorm ln2;
   final GPT2MLP mlp;
 
   GPT2Block({
     required super.name,
     required this.ln1,
-    required this.attn,
+    required this.attention,
     required this.ln2,
     required this.mlp,
   });
 
   @override
   Tensor forward(
-    Tensor hiddenStates, {
+    Tensor embeddings, {
     Tensor? layerPast,
     Tensor? attentionMask,
     Tensor? headMask,
@@ -26,14 +26,15 @@ class GPT2Block extends Module implements SimpleModule {
   }) {
     context.onloadModule(this);
 
-    Tensor residual = hiddenStates;
-    hiddenStates = ln1.forward(hiddenStates, context: context);
+    Tensor residual = embeddings;
+    embeddings = ln1.forward(embeddings, context: context);
 
     // TODO setup keyValueCache
     // TODO use attentionWeights
-    final (:outputEmbeddings, :attentionWeights) = attn.forward(
-      hiddenStates,
+    final (:outputEmbeddings, :attentionWeights) = attention.forward(
+      embeddings,
       attentionMask: attentionMask,
+      // TODO cache position
       headMask: headMask,
       encoderHiddenStates: encoderHiddenStates,
       outputAttentions: outputAttentions,
@@ -43,20 +44,26 @@ class GPT2Block extends Module implements SimpleModule {
     // TODO: Handle attnOutput being a tuple if useCache or outputAttentions is true
     // For now assuming it returns just the attention output tensor
 
-    hiddenStates = outputEmbeddings + residual;
+    embeddings = outputEmbeddings + residual;
 
-    residual = hiddenStates;
-    hiddenStates = ln2.forward(hiddenStates, context: context);
-    hiddenStates = mlp.forward(hiddenStates, context: context);
-    hiddenStates = hiddenStates + residual;
+    // TODO implement cross attention
 
-    return hiddenStates;
+    residual = embeddings;
+    embeddings = ln2.forward(embeddings, context: context);
+    embeddings = mlp.forward(embeddings, context: context);
+    embeddings = embeddings + residual;
+
+    return embeddings;
   }
+
+  int get layerIdx => attention.layerIdx;
+
+  int get embedDim => attention.embedDim;
 
   @override
   void resetParameters() {
     ln1.resetParameters();
-    attn.resetParameters();
+    attention.resetParameters();
     ln2.resetParameters();
     mlp.resetParameters();
   }
@@ -68,7 +75,7 @@ class GPT2Block extends Module implements SimpleModule {
   Map<String, dynamic> get meta => {};
 
   @override
-  late final Iterable<Module> submodules = [ln1, attn, ln2, mlp];
+  late final Iterable<Module> submodules = [ln1, attention, ln2, mlp];
 
   static GPT2Block make({
     required String name,
@@ -81,11 +88,12 @@ class GPT2Block extends Module implements SimpleModule {
     String postLayerNormName = 'ln_2',
     String mlpName = 'mlp',
     required bool scaleAttnByInverseLayerIdx,
-    required int mlpInnerDim,
+    required int? mlpInnerDim,
     required double attentionDropoutProbability,
     required double residualDropoutProbability,
     required bool isCrossAttention,
     required int maxPositionEmbeddings,
+    required Activation activation,
   }) {
     final ln1 = LayerNorm.make(
       name: 'ln_1',
@@ -115,10 +123,11 @@ class GPT2Block extends Module implements SimpleModule {
       name: 'mlp',
       embedDim: embedDim,
       mlpInnerDim: mlpInnerDim,
+      activation: activation,
       residualDropoutProbability: residualDropoutProbability,
     );
 
-    return GPT2Block(name: name, ln1: ln1, attn: attn, ln2: ln2, mlp: mlp);
+    return GPT2Block(name: name, ln1: ln1, attention: attn, ln2: ln2, mlp: mlp);
   }
 
   static Future<GPT2Block> loadFromSafeTensor(
@@ -137,7 +146,9 @@ class GPT2Block extends Module implements SimpleModule {
     required int layerIdx,
     required bool scaleAttnByInverseLayerIdx,
     required int maxPositionEmbeddings,
+    required Activation activation,
   }) async {
+    // TODO implement cross attention
     final attn = await GPT2Attention.loadFromSafeTensor(
       loader,
       prefix: '$prefix$attentionName.',
@@ -169,8 +180,9 @@ class GPT2Block extends Module implements SimpleModule {
       loader,
       prefix: '$prefix$mlpName.',
       name: mlpName,
+      activation: activation,
       residualDropoutProbability: residualDropoutProbability,
     );
-    return GPT2Block(name: name, ln1: ln1, attn: attn, ln2: ln2, mlp: mlp);
+    return GPT2Block(name: name, ln1: ln1, attention: attn, ln2: ln2, mlp: mlp);
   }
 }

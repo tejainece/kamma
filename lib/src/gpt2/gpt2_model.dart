@@ -122,11 +122,10 @@ class GPT2Model extends Module {
     required int nLayer,
     required double layerNormEpsilon,
     required bool isCrossAttention,
-    required bool scaleAttnWeights,
     required bool scaleAttnByInverseLayerIdx,
-    required bool reorderAndUpcastAttn,
     required int maxPositionEmbeddings,
-    required int mlpInnerDim,
+    required int? mlpInnerDim,
+    required Activation activation,
     String wteName = 'wte',
     String wpeName = 'wpe',
     String lnFName = 'ln_f',
@@ -161,6 +160,7 @@ class GPT2Model extends Module {
           scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
           maxPositionEmbeddings: maxPositionEmbeddings,
           mlpInnerDim: mlpInnerDim,
+          activation: activation,
         ),
       );
     }
@@ -193,10 +193,10 @@ class GPT2Model extends Module {
     required double residualDropoutProbability,
     required double layerNormEpsilon,
     required int numHeads,
-    required bool scaleAttnWeights,
     required bool scaleAttnByInverseLayerIdx,
-    required bool reorderAndUpcastAttn,
     required int maxPositionEmbeddings,
+    required Activation activation,
+    required bool isCrossAttention,
   }) async {
     final wte = await EmbeddingLayer.loadFromSafeTensor(
       loader,
@@ -222,10 +222,11 @@ class GPT2Model extends Module {
         attentionDropoutProbability: attentionDropoutProbability,
         residualDropoutProbability: residualDropoutProbability,
         numHeads: numHeads,
-        isCrossAttention: false, // Default for now
+        isCrossAttention: isCrossAttention,
         layerIdx: i,
         scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
         maxPositionEmbeddings: maxPositionEmbeddings,
+        activation: activation,
       );
       blocks.add(block);
     }

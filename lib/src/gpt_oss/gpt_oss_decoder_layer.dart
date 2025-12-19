@@ -17,7 +17,7 @@ class GptOssDecoderLayer extends Module implements SimpleModule {
 
   @override
   Tensor forward(
-    Tensor hiddenStates, {
+    Tensor embeddings, {
     List<Tensor>? layerPast,
     Tensor? attentionMask,
     Tensor? positionIds,
@@ -30,11 +30,11 @@ class GptOssDecoderLayer extends Module implements SimpleModule {
   }) {
     context.onloadModule(this);
 
-    Tensor residual = hiddenStates;
-    hiddenStates = ln1.forward(hiddenStates, context: context);
+    Tensor residual = embeddings;
+    embeddings = ln1.forward(embeddings, context: context);
 
     Tensor attnOutput = attn.forward(
-      hiddenStates,
+      embeddings,
       layerPast: layerPast,
       attentionMask: attentionMask,
       positionIds: positionIds,
@@ -46,14 +46,14 @@ class GptOssDecoderLayer extends Module implements SimpleModule {
       context: context,
     );
 
-    hiddenStates = attnOutput + residual;
+    embeddings = attnOutput + residual;
 
-    residual = hiddenStates;
-    hiddenStates = ln2.forward(hiddenStates, context: context);
-    hiddenStates = moe.forward(hiddenStates, context: context);
-    hiddenStates = hiddenStates + residual;
+    residual = embeddings;
+    embeddings = ln2.forward(embeddings, context: context);
+    embeddings = moe.forward(embeddings, context: context);
+    embeddings = embeddings + residual;
 
-    return hiddenStates;
+    return embeddings;
   }
 
   @override

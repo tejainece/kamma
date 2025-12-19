@@ -79,7 +79,7 @@ class LlamaDecoderLayer extends Module implements SimpleModule {
 
   @override
   Tensor forward(
-    Tensor x, {
+    Tensor embeddings, {
     required Context context,
     Tensor? attentionMask,
     Tensor? positionIds,
@@ -89,10 +89,10 @@ class LlamaDecoderLayer extends Module implements SimpleModule {
     context.onloadModule(this);
 
     // Residual connection
-    Tensor residual = x;
+    Tensor residual = embeddings;
 
     // 1. Input Norm
-    Tensor hiddenStates = inputLayernorm.forward(x, context: context);
+    Tensor hiddenStates = inputLayernorm.forward(embeddings, context: context);
 
     // 2. Self Attention
     // self_attn(hidden_states, ...)

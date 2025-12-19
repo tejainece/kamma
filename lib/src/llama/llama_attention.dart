@@ -115,7 +115,7 @@ class LlamaAttention extends Module implements SimpleModule {
 
   @override
   Tensor forward(
-    Tensor x, {
+    Tensor embeddings, {
     required Context context,
     Tensor? attentionMask,
     Tensor? positionIds,
@@ -125,21 +125,21 @@ class LlamaAttention extends Module implements SimpleModule {
   }) {
     context.onloadModule(this);
 
-    final bsz = x.shape[0];
-    final qLen = x.shape[1];
+    final bsz = embeddings.shape[0];
+    final qLen = embeddings.shape[1];
 
     final queryStates = qProj
-        .forward(x, context: context)
+        .forward(embeddings, context: context)
         .view([bsz, qLen, numHeads, headDim])
         .transpose(1, 2);
 
     final keyStates = kProj
-        .forward(x, context: context)
+        .forward(embeddings, context: context)
         .view([bsz, qLen, numKeyValueHeads, headDim])
         .transpose(1, 2);
 
     Tensor valueStates = vProj
-        .forward(x, context: context)
+        .forward(embeddings, context: context)
         .view([bsz, qLen, numKeyValueHeads, headDim])
         .transpose(1, 2);
 
@@ -179,7 +179,7 @@ class LlamaAttention extends Module implements SimpleModule {
     }
 
     // softmax
-    attnScores = attnScores.softmax(-1).to(dataType: x.dataType);
+    attnScores = attnScores.softmax(-1).to(dataType: embeddings.dataType);
 
     // dropout (TODO if training)
 

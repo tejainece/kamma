@@ -66,7 +66,7 @@ class S3DiTAttention extends Module implements SimpleModule {
 
   @override
   Tensor forward(
-    Tensor hiddenStates, {
+    Tensor embeddings, {
     Tensor? posX,
     Tensor? posY,
     Tensor? posT,
@@ -75,13 +75,13 @@ class S3DiTAttention extends Module implements SimpleModule {
   }) {
     context.onloadModule(this);
 
-    final batch = hiddenStates.shape[0];
-    final seqLen = hiddenStates.shape[1];
+    final batch = embeddings.shape[0];
+    final seqLen = embeddings.shape[1];
 
     // Project to Q, K, V
-    Tensor query = qProj.forward(hiddenStates, context: context);
-    Tensor key = kProj.forward(hiddenStates, context: context);
-    Tensor value = vProj.forward(hiddenStates, context: context);
+    Tensor query = qProj.forward(embeddings, context: context);
+    Tensor key = kProj.forward(embeddings, context: context);
+    Tensor value = vProj.forward(embeddings, context: context);
 
     // Split into heads
     query = _splitHeads(query);

@@ -7,8 +7,8 @@ void main() {
       vocabSize: 100,
       nPositions: 20,
       embedDim: 32,
-      nLayer: 2,
-      nHead: 4,
+      numLayers: 2,
+      numHeads: 4,
     );
 
     final model = GPT2LMHeadModel.make(config: config, name: 'gpt2');
@@ -41,14 +41,14 @@ void main() {
   });
 
   test('GPT2Attention forward pass', () {
-    final config = GPT2Config(embedDim: 32, nHead: 4, nLayer: 2);
+    final config = GPT2Config(embedDim: 32, numHeads: 4, numLayers: 2);
     final attention = GPT2Attention.make(
       name: 'attn',
       layerIdx: 0,
       embedDim: config.embedDim,
-      numHeads: config.nHead,
-      attentionDropoutProbability: config.attnPdrop,
-      residualDropoutProbability: config.residPdrop,
+      numHeads: config.numHeads,
+      attentionDropoutProbability: config.attentionDropoutProbability,
+      residualDropoutProbability: config.residualDropoutProbability,
       isCrossAttention: false,
       scaleAttnByInverseLayerIdx: config.scaleAttnByInverseLayerIdx,
       maxPositionEmbeddings: config.maxPositionEmbeddings,
@@ -68,7 +68,7 @@ void main() {
     ]);
     expect(output.attentionWeights.shape, [
       batchSize,
-      config.nHead,
+      config.numHeads,
       seqLength,
       seqLength,
     ]);
@@ -79,7 +79,8 @@ void main() {
     final mlp = GPT2MLP.make(
       embedDim: config.embedDim,
       mlpInnerDim: config.mlpInnerDim,
-      residualDropoutProbability: config.residPdrop,
+      residualDropoutProbability: config.residualDropoutProbability,
+      activation: Activation.geluTanh,
       name: 'mlp',
     );
     final context = Context.best();

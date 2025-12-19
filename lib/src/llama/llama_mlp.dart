@@ -71,11 +71,11 @@ class LlamaMLP extends Module implements SimpleModule {
   }
 
   @override
-  Tensor forward(Tensor x, {required Context context}) {
+  Tensor forward(Tensor embeddings, {required Context context}) {
     context.onloadModule(this);
 
-    final gate = gateProj.forward(x, context: context);
-    final up = upProj.forward(x, context: context);
+    final gate = gateProj.forward(embeddings, context: context);
+    final up = upProj.forward(embeddings, context: context);
 
     Tensor activated;
     if (config.hiddenAct == 'silu') {

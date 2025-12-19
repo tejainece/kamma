@@ -1,39 +1,43 @@
 import 'package:kamma/kamma.dart';
 
 class GPT2MLP extends Module implements SimpleModule {
-  final LinearLayer cFc;
-  final LinearLayer cProj;
-  final Activation act;
+  /// Projects the context-aware embedding output from [embedDim] to a higher [innerDim]
+  /// to increase the expressive capacity.
+  final LinearLayer upProjection;
+
+  /// Projects back from [innerDim] to [embedDim] after applying the [activation] function.
+  final LinearLayer downProjection;
+  final Activation activation;
   final Dropout dropout;
 
   GPT2MLP({
     required super.name,
-    required this.cFc,
-    required this.cProj,
-    required this.act,
+    required this.upProjection,
+    required this.downProjection,
+    required this.activation,
     required this.dropout,
   });
 
   @override
-  Tensor forward(Tensor hiddenStates, {required Context context}) {
+  Tensor forward(Tensor embeddings, {required Context context}) {
     context.onloadModule(this);
 
-    hiddenStates = cFc.forward(hiddenStates, context: context);
-    hiddenStates = act.forward(hiddenStates, context: context);
-    hiddenStates = cProj.forward(hiddenStates, context: context);
-    hiddenStates = dropout.forward(hiddenStates, context: context);
+    embeddings = upProjection.forward(embeddings, context: context);
+    embeddings = activation.forward(embeddings, context: context);
+    embeddings = downProjection.forward(embeddings, context: context);
+    embeddings = dropout.forward(embeddings, context: context);
 
-    return hiddenStates;
+    return embeddings;
   }
 
-  int get embedDim => cFc.inFeatures;
+  int get embedDim => upProjection.inFeatures;
 
-  int get innerDim => cFc.outFeatures;
+  int get innerDim => upProjection.outFeatures;
 
   @override
   void resetParameters() {
-    cFc.resetParameters();
-    cProj.resetParameters();
+    upProjection.resetParameters();
+    downProjection.resetParameters();
   }
 
   @override
@@ -43,13 +47,18 @@ class GPT2MLP extends Module implements SimpleModule {
   Map<String, dynamic> get meta => {"embedDim": embedDim};
 
   @override
-  late final Iterable<Module> submodules = [cFc, cProj, dropout];
+  late final Iterable<Module> submodules = [
+    upProjection,
+    downProjection,
+    dropout,
+  ];
 
   static GPT2MLP make({
     required String name,
     required int embedDim,
     required int? mlpInnerDim,
     required double residualDropoutProbability,
+    required Activation activation,
     String cFcName = 'c_fc',
     String cProjName = 'c_proj',
   }) {
@@ -67,14 +76,13 @@ class GPT2MLP extends Module implements SimpleModule {
       outFeatures: embedDim,
     );
 
-    // For now defaulting to GELU as per standard GPT-2
     final dropout = Dropout(residualDropoutProbability);
 
     return GPT2MLP(
       name: name,
-      cFc: cFc,
-      cProj: cProj,
-      act: _makeActivation(),
+      upProjection: cFc,
+      downProjection: cProj,
+      activation: activation,
       dropout: dropout,
     );
   }
@@ -84,6 +92,7 @@ class GPT2MLP extends Module implements SimpleModule {
     required String prefix,
     required String name,
     required double residualDropoutProbability,
+    required Activation activation,
     String cFcName = 'c_fc',
     String cProjName = 'c_proj',
   }) async {
@@ -101,15 +110,10 @@ class GPT2MLP extends Module implements SimpleModule {
 
     return GPT2MLP(
       name: name,
-      cFc: cFc,
-      cProj: cProj,
-      act: _makeActivation(),
+      upProjection: cFc,
+      downProjection: cProj,
+      activation: activation,
       dropout: dropout,
     );
-  }
-
-  static Activation _makeActivation() {
-    // TODO: Handle different activation functions from config if needed
-    return Activation.gelu;
   }
 }

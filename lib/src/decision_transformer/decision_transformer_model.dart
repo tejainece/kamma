@@ -263,23 +263,26 @@ class DecisionTransformerModel extends Module {
       name: 'embed_return',
     );
 
-    final drop = Dropout(config.embdPdrop);
+    final drop = Dropout(config.embedDropoutProbability);
 
     final h = <GPT2Block>[];
-    for (int i = 0; i < config.nLayer; i++) {
+    for (int i = 0; i < config.numLayers; i++) {
       h.add(
         GPT2Block.make(
           name: 'h.$i',
           layerIdx: i,
           embedDim: config.embedDim,
-          numHeads: config.nHead,
+          numHeads: config.numHeads,
           layerNormEpsilon: config.layerNormEpsilon,
-          attentionDropoutProbability: config.attnPdrop,
-          residualDropoutProbability: config.residPdrop,
+          attentionDropoutProbability: config.attentionDropoutProbability,
+          residualDropoutProbability: config.residualDropoutProbability,
           isCrossAttention: false,
           scaleAttnByInverseLayerIdx: config.scaleAttnByInverseLayerIdx,
           mlpInnerDim: config.mlpInnerDim,
           maxPositionEmbeddings: config.maxPositionEmbeddings,
+          activation:
+              Activation.fromName(config.activationFunction) ??
+              Activation.geluTanh,
         ),
       );
     }

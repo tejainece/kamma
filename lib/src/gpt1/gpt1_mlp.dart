@@ -15,15 +15,15 @@ class OpenAIGPTMLP extends Module implements SimpleModule {
   });
 
   @override
-  Tensor forward(Tensor hiddenStates, {required Context context}) {
+  Tensor forward(Tensor embeddings, {required Context context}) {
     context.onloadModule(this);
 
-    hiddenStates = cFc.forward(hiddenStates, context: context);
-    hiddenStates = act.forward(hiddenStates, context: context);
-    hiddenStates = cProj.forward(hiddenStates, context: context);
-    hiddenStates = dropout.forward(hiddenStates, context: context);
+    embeddings = cFc.forward(embeddings, context: context);
+    embeddings = act.forward(embeddings, context: context);
+    embeddings = cProj.forward(embeddings, context: context);
+    embeddings = dropout.forward(embeddings, context: context);
 
-    return hiddenStates;
+    return embeddings;
   }
 
   int get embedDim => cFc.inFeatures;

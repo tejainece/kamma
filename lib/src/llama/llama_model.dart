@@ -77,7 +77,7 @@ class LlamaModel extends Module implements SimpleModule {
 
   @override
   Tensor forward(
-    Tensor inputIds, {
+    Tensor embeddings, {
     required Context context,
     Tensor? attentionMask,
     Tensor? positionIds,
@@ -86,16 +86,16 @@ class LlamaModel extends Module implements SimpleModule {
     context.onloadModule(this);
 
     // Embeddings
-    Tensor hiddenStates = tokens.forward(inputIds, context: context);
+    Tensor hiddenStates = tokens.forward(embeddings, context: context);
 
     // Prepare RoPE position embeddings
     // (cos, sin) = rotary_emb(hiddenStates, positionIds)
     if (positionIds == null) {
       // Generate pos IDs if null?
       // Usually user provides them or we generate.
-      final seqLen = inputIds.shape[1];
+      final seqLen = embeddings.shape[1];
       // arange(0, seqLen).unsqueeze(0).expand(bsz, seqLen)
-      final device = inputIds.device;
+      final device = embeddings.device;
       positionIds = Tensor.arange(0, seqLen, device: device).unsqueeze(0);
     }
 
@@ -176,7 +176,7 @@ class LlamaForCausalLM extends Module implements SimpleModule {
 
   @override
   Tensor forward(
-    Tensor inputIds, {
+    Tensor embeddings, {
     required Context context,
     Tensor? attentionMask,
     Tensor? positionIds,
@@ -184,7 +184,7 @@ class LlamaForCausalLM extends Module implements SimpleModule {
     context.onloadModule(this);
 
     final hiddenStates = model.forward(
-      inputIds,
+      embeddings,
       context: context,
       attentionMask: attentionMask,
       positionIds: positionIds,

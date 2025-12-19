@@ -12,7 +12,7 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
 
   @override
   Tensor forward(
-    Tensor inputIds, {
+    Tensor embeddings, {
     Tensor? pastKeyValues,
     Tensor? attentionMask,
     Tensor? tokenTypeIds,
@@ -28,7 +28,7 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
     context.onloadModule(this);
 
     Tensor hiddenStates = transformer.forward(
-      inputIds,
+      embeddings,
       pastKeyValues: pastKeyValues,
       attentionMask: attentionMask,
       tokenTypeIds: tokenTypeIds,
@@ -226,25 +226,32 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
 
   static GPT2LMHeadModel make({
     required GPT2Config config,
+    bool isCrossAttention = false,
     required String name,
   }) {
+    final activation = Activation.fromName(config.activationFunction);
+    if (activation == null) {
+      throw ArgumentError(
+        'Unknown activation function: ${config.activationFunction}',
+      );
+    }
+
     final transformer = GPT2Model.make(
       name: 'transformer',
       vocabSize: config.vocabSize,
       nPositions: config.nPositions,
       embedDim: config.embedDim,
-      nLayer: config.nLayer,
-      numHeads: config.nHead,
-      embedDropoutProbability: config.embdPdrop,
-      attentionDropoutProbability: config.attnPdrop,
-      residualDropoutProbability: config.residPdrop,
+      nLayer: config.numLayers,
+      numHeads: config.numHeads,
+      embedDropoutProbability: config.embedDropoutProbability,
+      attentionDropoutProbability: config.attentionDropoutProbability,
+      residualDropoutProbability: config.residualDropoutProbability,
       layerNormEpsilon: config.layerNormEpsilon,
-      isCrossAttention: false, // Default for now
-      scaleAttnWeights: config.scaleAttnWeights,
+      isCrossAttention: isCrossAttention,
       scaleAttnByInverseLayerIdx: config.scaleAttnByInverseLayerIdx,
-      reorderAndUpcastAttn: config.reorderAndUpcastAttn,
       mlpInnerDim: config.mlpInnerDim,
       maxPositionEmbeddings: config.maxPositionEmbeddings,
+      activation: activation,
     );
 
     final lmHead = LinearLayer.make(
@@ -277,31 +284,31 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
     SafeTensorLoader loader, {
     required String prefix,
     required String name,
-    required double embedDropoutProbability,
-    required double attentionDropoutProbability,
-    required double residualDropoutProbability,
-    required double layerNormEpsilon,
-    required int numHeads,
-    required bool scaleAttnWeights,
-    required bool scaleAttnByInverseLayerIdx,
-    required bool reorderAndUpcastAttn,
-    required int maxPositionEmbeddings,
+    required GPT2Config config,
+    bool isCrossAttention = false,
     String lmHeadName = 'lm_f.',
     String transformerName = '',
   }) async {
+    final activation = Activation.fromName(config.activationFunction);
+    if (activation == null) {
+      throw ArgumentError(
+        'Unknown activation function: ${config.activationFunction}',
+      );
+    }
+
     final transformer = await GPT2Model.loadFromSafeTensor(
       loader,
       prefix: Module.combineDirs(prefix, transformerName),
       name: name,
-      embedDropoutProbability: embedDropoutProbability,
-      attentionDropoutProbability: attentionDropoutProbability,
-      residualDropoutProbability: residualDropoutProbability,
-      layerNormEpsilon: layerNormEpsilon,
-      numHeads: numHeads,
-      scaleAttnWeights: scaleAttnWeights,
-      scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
-      reorderAndUpcastAttn: reorderAndUpcastAttn,
-      maxPositionEmbeddings: maxPositionEmbeddings,
+      embedDropoutProbability: config.embedDropoutProbability,
+      attentionDropoutProbability: config.attentionDropoutProbability,
+      residualDropoutProbability: config.residualDropoutProbability,
+      layerNormEpsilon: config.layerNormEpsilon,
+      numHeads: config.numHeads,
+      scaleAttnByInverseLayerIdx: config.scaleAttnByInverseLayerIdx,
+      maxPositionEmbeddings: config.maxPositionEmbeddings,
+      activation: activation,
+      isCrossAttention: isCrossAttention,
     );
 
     final lmHead = await LinearLayer.loadFromSafeTensor(

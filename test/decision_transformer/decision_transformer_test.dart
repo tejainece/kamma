@@ -13,8 +13,8 @@ void main() {
         actDim: 4,
         maxEpLen: 100,
         embedDim: 32,
-        nLayer: 2,
-        nHead: 4,
+        numLayers: 2,
+        numHeads: 4,
         vocabSize: 100,
         nPositions: 100,
       );
