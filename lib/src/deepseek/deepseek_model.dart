@@ -4,7 +4,6 @@ import 'deepseek_config.dart';
 import 'deepseek_decoder_layer.dart';
 import 'deepseek_rms_norm.dart';
 import 'deepseek_rotary_embedding.dart';
-import 'deepseek_rotary_embedding.dart';
 
 class DeepSeekModel extends Module implements SimpleModule {
   final DeepSeekConfig config;
@@ -35,13 +34,13 @@ class DeepSeekModel extends Module implements SimpleModule {
       tokens: EmbeddingLayer.make(
         numEmbeddings: config.vocabSize,
         embedDim: config.hiddenSize,
-        name: '${name}.embed_tokens',
+        name: '$name.embed_tokens',
         paddingIdx: 0, // Usually 0 or check config
       ),
       layers: List.generate(
         config.numHiddenLayers,
         (i) => DeepSeekDecoderLayer(
-          name: '${name}.layers.$i',
+          name: '$name.layers.$i',
           config: config,
           layerIdx: i,
           rotaryEmbedding: rotaryEmb,
