@@ -56,6 +56,10 @@ class GPT2Block extends Module implements SimpleModule {
     return embeddings;
   }
 
+  void resetKeyValueCache({Tensor? key, Tensor? value}) {
+    attention.keyValueCache.reset(key: key, value: value);
+  }
+
   int get layerIdx => attention.layerIdx;
 
   int get embedDim => attention.embedDim;
@@ -147,6 +151,7 @@ class GPT2Block extends Module implements SimpleModule {
     required bool scaleAttnByInverseLayerIdx,
     required int maxPositionEmbeddings,
     required Activation activation,
+    required int embedDim,
   }) async {
     // TODO implement cross attention
     final attn = await GPT2Attention.loadFromSafeTensor(
@@ -161,7 +166,7 @@ class GPT2Block extends Module implements SimpleModule {
       scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
       maxPositionEmbeddings: maxPositionEmbeddings,
     );
-    final embedDim = attn.embedDim;
+    // final embedDim = attn.embedDim;
     final ln1 = await LayerNorm.loadFromSafeTensor(
       loader,
       name: preLayerNormName,

@@ -80,6 +80,15 @@ class GPT2Model extends Module {
     return hiddenStates;
   }
 
+  void resetKeyValueCache(List<({Tensor? key, Tensor? value})>? keyValueCache) {
+    for (int i = 0; i < h.length; i++) {
+      h[i].resetKeyValueCache(
+        key: keyValueCache?[i].key,
+        value: keyValueCache?[i].value,
+      );
+    }
+  }
+
   int get embedDim => wte.embeddingDim;
 
   int get vocabSize => wte.numEmbeddings;
@@ -227,6 +236,7 @@ class GPT2Model extends Module {
         scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
         maxPositionEmbeddings: maxPositionEmbeddings,
         activation: activation,
+        embedDim: embedDim,
       );
       blocks.add(block);
     }

@@ -23,7 +23,7 @@ class OpenAIGPTAttention extends Module {
     // if (cAttn.inFeatures % nHead != 0) { ... }
   }
 
-  int get embedDim => cAttn.inFeatures;
+  int get embedDim => cAttn.numInFeatures;
   int get headDim => embedDim ~/ nHead;
 
   Tensor _attn(
@@ -162,7 +162,7 @@ class OpenAIGPTAttention extends Module {
     "nHead": nHead,
     "nCtx": nCtx,
     "scale": scale,
-    "embedDim": cAttn.inFeatures,
+    "embedDim": cAttn.numInFeatures,
   };
 
   @override

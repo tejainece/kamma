@@ -1,12 +1,12 @@
-import 'package:kamma/kamma.dart';
+import 'package:tensor/tensor.dart';
 
 class GPT2MLP extends Module implements SimpleModule {
   /// Projects the context-aware embedding output from [embedDim] to a higher [innerDim]
   /// to increase the expressive capacity.
-  final LinearLayer upProjection;
+  final LinearTransposed upProjection;
 
   /// Projects back from [innerDim] to [embedDim] after applying the [activation] function.
-  final LinearLayer downProjection;
+  final LinearTransposed downProjection;
   final Activation activation;
   final Dropout dropout;
 
@@ -30,9 +30,9 @@ class GPT2MLP extends Module implements SimpleModule {
     return embeddings;
   }
 
-  int get embedDim => upProjection.inFeatures;
+  int get embedDim => upProjection.numInFeatures;
 
-  int get innerDim => upProjection.outFeatures;
+  int get innerDim => upProjection.numOutFeatures;
 
   @override
   void resetParameters() {
@@ -64,16 +64,16 @@ class GPT2MLP extends Module implements SimpleModule {
   }) {
     mlpInnerDim ??= 4 * embedDim;
 
-    final cFc = LinearLayer.make(
+    final cFc = LinearTransposed.make(
       name: cFcName,
-      inFeatures: embedDim,
-      outFeatures: mlpInnerDim,
+      numInFeatures: embedDim,
+      numOutFeatures: mlpInnerDim,
     );
 
-    final cProj = LinearLayer.make(
+    final cProj = LinearTransposed.make(
       name: cProjName,
-      inFeatures: mlpInnerDim,
-      outFeatures: embedDim,
+      numInFeatures: mlpInnerDim,
+      numOutFeatures: embedDim,
     );
 
     final dropout = Dropout(residualDropoutProbability);
@@ -96,14 +96,16 @@ class GPT2MLP extends Module implements SimpleModule {
     String cFcName = 'c_fc',
     String cProjName = 'c_proj',
   }) async {
-    final cFc = await LinearLayer.loadFromSafeTensor(
+    final cFc = await LinearTransposed.loadFromSafeTensor(
       loader,
       prefix: '$prefix$cFcName.',
+      name: cFcName,
     );
 
-    final cProj = await LinearLayer.loadFromSafeTensor(
+    final cProj = await LinearTransposed.loadFromSafeTensor(
       loader,
       prefix: '$prefix$cProjName.',
+      name: cProjName,
     );
 
     final dropout = Dropout(residualDropoutProbability);

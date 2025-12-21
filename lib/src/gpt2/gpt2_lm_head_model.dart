@@ -206,6 +206,10 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
     return currentInputIds;
   }
 
+  void resetKeyValueCache(List<({Tensor? key, Tensor? value})>? keyValueCache) {
+    transformer.resetKeyValueCache(keyValueCache);
+  }
+
   @override
   void resetParameters() {
     transformer.resetParameters();
@@ -282,11 +286,11 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
 
   static Future<GPT2LMHeadModel> loadFromSafeTensor(
     SafeTensorLoader loader, {
-    required String prefix,
+    String prefix = '',
     required String name,
     required GPT2Config config,
     bool isCrossAttention = false,
-    String lmHeadName = 'lm_f.',
+    String lmHeadName = 'lm_head',
     String transformerName = '',
   }) async {
     final activation = Activation.fromName(config.activationFunction);
@@ -311,11 +315,18 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
       isCrossAttention: isCrossAttention,
     );
 
-    final lmHead = await LinearLayer.loadFromSafeTensor(
-      loader,
-      prefix: '$prefix$lmHeadName.',
-      name: lmHeadName,
-    );
+    LinearLayer lmHead;
+    final lmHeadPrefix = '$prefix$lmHeadName.';
+    if (loader.hasTensor('${lmHeadPrefix}weight')) {
+      lmHead = await LinearLayer.loadFromSafeTensor(
+        loader,
+        prefix: '$prefix$lmHeadName.',
+        name: lmHeadName,
+      );
+    } else {
+      // Weight tying with wte
+      lmHead = LinearLayer(name: lmHeadName, weight: transformer.wte.weights);
+    }
 
     return GPT2LMHeadModel(
       name: name,

@@ -26,7 +26,7 @@ class OpenAIGPTMLP extends Module implements SimpleModule {
     return embeddings;
   }
 
-  int get embedDim => cFc.inFeatures;
+  int get embedDim => cFc.numInFeatures;
 
   @override
   void resetParameters() {

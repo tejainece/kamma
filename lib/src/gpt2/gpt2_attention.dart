@@ -1,6 +1,6 @@
 import 'dart:math';
-import 'package:kamma/kamma.dart';
-import 'package:kamma/src/gpt2/attention_methods.dart';
+import 'package:tensor/tensor.dart';
+import 'attention_methods.dart';
 
 class GPT2Attention extends Module {
   final int layerIdx;
@@ -9,8 +9,8 @@ class GPT2Attention extends Module {
   /// Contains/performs q_proj, k_proj, v_proj in single linear layer for efficiency.
   /// Only used if [isCrossAttention] is false, because in cross-attention, key and
   /// value come from the encoder.
-  final LinearLayer qkvAttention;
-  final LinearLayer outputProjection;
+  final LinearTransposed qkvAttention;
+  final LinearTransposed outputProjection;
   final Dropout attentionDropout;
   final Dropout residualDropout;
   late AttentionCache keyValueCache;
@@ -61,7 +61,7 @@ class GPT2Attention extends Module {
     }
   }
 
-  int get embedDim => qkvAttention.inFeatures;
+  int get embedDim => qkvAttention.numInFeatures;
 
   int get splitSize => embedDim;
 
@@ -218,16 +218,16 @@ class GPT2Attention extends Module {
     String qkvAttentionName = 'c_attn',
     String outputProjectionName = 'c_proj',
   }) {
-    final qkvAttention = LinearLayer.make(
+    final qkvAttention = LinearTransposed.make(
       name: qkvAttentionName,
-      inFeatures: embedDim,
-      outFeatures: 3 * embedDim,
+      numInFeatures: embedDim,
+      numOutFeatures: 3 * embedDim,
     );
 
-    final outputProjection = LinearLayer.make(
+    final outputProjection = LinearTransposed.make(
       name: outputProjectionName,
-      inFeatures: embedDim,
-      outFeatures: embedDim,
+      numInFeatures: embedDim,
+      numOutFeatures: embedDim,
     );
 
     final attnDropout = Dropout(attentionDropoutProbability);
@@ -263,12 +263,12 @@ class GPT2Attention extends Module {
     GPT2AttentionMethodType attnFuncType = .eager,
     required int maxPositionEmbeddings,
   }) async {
-    final qkvAttention = await LinearLayer.loadFromSafeTensor(
+    final qkvAttention = await LinearTransposed.loadFromSafeTensor(
       loader,
       prefix: '$prefix$qkvAttentionName.',
       name: qkvAttentionName,
     );
-    final outputProjection = await LinearLayer.loadFromSafeTensor(
+    final outputProjection = await LinearTransposed.loadFromSafeTensor(
       loader,
       prefix: '$prefix$outputProjectionName.',
       name: outputProjectionName,
@@ -322,13 +322,8 @@ class AttentionCache {
 
   Tensor get value => _value;
 
-  void reset() {
-    _key = Tensor.empty([0, 0, 0, 0]);
-    _value = Tensor.empty([0, 0, 0, 0]);
-  }
-
-  void resetWith({required Tensor key, required Tensor value}) {
-    _key = key;
-    _value = value;
+  void reset({Tensor? key, Tensor? value}) {
+    _key = key ?? Tensor.empty([0, 0, 0, 0]);
+    _value = value ?? Tensor.empty([0, 0, 0, 0]);
   }
 }
