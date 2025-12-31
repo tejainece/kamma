@@ -99,13 +99,13 @@ class GPT2Attention extends Module {
   /// [attentionMask] is used to mask out certain positions in the sequence. For example, to mask
   /// out padding tokens. It is of shape (batch, 1, 1, seq_length).
   /// [headMask] is used to mask out certain heads in the attention.
-  ({Tensor outputEmbeddings, Tensor attentionWeights}) forward(
+  Tensor forward(
     Tensor inputEmbeddings, {
     // TODO implement cachePosition
     Tensor? attentionMask,
     Tensor? headMask,
     Tensor? encoderHiddenStates,
-    bool outputAttentions = false,
+    List<Tensor>? outputAttentions,
     required Context context,
   }) {
     context.onloadModule(this);
@@ -166,10 +166,8 @@ class GPT2Attention extends Module {
       context: context,
     );
 
-    return (
-      outputEmbeddings: attentionOutput,
-      attentionWeights: attentionWeights,
-    );
+    outputAttentions?.add(attentionWeights);
+    return attentionOutput;
   }
 
   @override
@@ -321,6 +319,8 @@ class AttentionCache {
   Tensor get key => _key;
 
   Tensor get value => _value;
+
+  int get seqLength => _key.shape[2];
 
   void reset({Tensor? key, Tensor? value}) {
     _key = key ?? Tensor.empty([0, 0, 0, 0]);

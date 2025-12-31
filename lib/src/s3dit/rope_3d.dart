@@ -182,7 +182,7 @@ class RoPE3D {
     required int seqLen,
     int batchSize = 1,
   }) {
-    Tensor pos = Tensor.arange(0, seqLen, datatype: DataType.int64);
+    Tensor pos = Tensor.arange(0, seqLen, dataType: DataType.int64);
 
     if (batchSize > 1) {
       pos = pos.unsqueeze(0).expand([batchSize, seqLen]);

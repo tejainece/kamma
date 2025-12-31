@@ -4,6 +4,10 @@ class GPT2Block extends Module implements SimpleModule {
   final LayerNorm ln1;
   final GPT2Attention attention;
   final LayerNorm ln2;
+
+  final GPT2Attention? crossAttention;
+  final LayerNorm? lnCrossAttention;
+
   final GPT2MLP mlp;
 
   GPT2Block({
@@ -11,42 +15,51 @@ class GPT2Block extends Module implements SimpleModule {
     required this.ln1,
     required this.attention,
     required this.ln2,
+    required this.crossAttention,
+    required this.lnCrossAttention,
     required this.mlp,
   });
 
   @override
   Tensor forward(
     Tensor embeddings, {
-    Tensor? layerPast,
     Tensor? attentionMask,
     Tensor? headMask,
     Tensor? encoderHiddenStates,
-    bool outputAttentions = false,
+    List<Tensor>? outputSelfAttentions,
+    List<Tensor>? outputCrossAttention,
     required Context context,
   }) {
     context.onloadModule(this);
 
     Tensor residual = embeddings;
-    embeddings = ln1.forward(embeddings, context: context);
 
-    // TODO setup keyValueCache
-    // TODO use attentionWeights
-    final (:outputEmbeddings, :attentionWeights) = attention.forward(
+    embeddings = ln1.forward(embeddings, context: context);
+    final outputEmbeddings = attention.forward(
       embeddings,
       attentionMask: attentionMask,
       // TODO cache position
       headMask: headMask,
       encoderHiddenStates: encoderHiddenStates,
-      outputAttentions: outputAttentions,
+      outputAttentions: outputSelfAttentions,
       context: context,
     );
-
-    // TODO: Handle attnOutput being a tuple if useCache or outputAttentions is true
-    // For now assuming it returns just the attention output tensor
-
     embeddings = outputEmbeddings + residual;
 
-    // TODO implement cross attention
+    if (crossAttention != null) {
+      residual = embeddings;
+      embeddings = lnCrossAttention!.forward(embeddings, context: context);
+      Tensor crossAttentionOutput = crossAttention!.forward(
+        embeddings,
+        context: context,
+        attentionMask: attentionMask,
+        headMask: headMask,
+        encoderHiddenStates: encoderHiddenStates,
+        // TODO encoder_attention_mask
+        outputAttentions: outputCrossAttention,
+      );
+      embeddings = residual + crossAttentionOutput;
+    }
 
     residual = embeddings;
     embeddings = ln2.forward(embeddings, context: context);
@@ -79,7 +92,14 @@ class GPT2Block extends Module implements SimpleModule {
   Map<String, dynamic> get meta => {};
 
   @override
-  late final Iterable<Module> submodules = [ln1, attention, ln2, mlp];
+  late final Iterable<Module> submodules = [
+    ln1,
+    attention,
+    ln2,
+    mlp,
+    if (crossAttention != null) crossAttention!,
+    if (lnCrossAttention != null) lnCrossAttention!,
+  ];
 
   static GPT2Block make({
     required String name,
@@ -112,7 +132,7 @@ class GPT2Block extends Module implements SimpleModule {
       numHeads: numHeads,
       attentionDropoutProbability: attentionDropoutProbability,
       residualDropoutProbability: residualDropoutProbability,
-      isCrossAttention: isCrossAttention,
+      isCrossAttention: false,
       scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
       maxPositionEmbeddings: maxPositionEmbeddings,
     );
@@ -131,7 +151,35 @@ class GPT2Block extends Module implements SimpleModule {
       residualDropoutProbability: residualDropoutProbability,
     );
 
-    return GPT2Block(name: name, ln1: ln1, attention: attn, ln2: ln2, mlp: mlp);
+    GPT2Attention? crossAttention;
+    LayerNorm? lnCrossAttention;
+    if (isCrossAttention) {
+      crossAttention = GPT2Attention.make(
+        name: 'crossattention',
+        isCrossAttention: true,
+        layerIdx: layerIdx,
+        embedDim: embedDim,
+        attentionDropoutProbability: attentionDropoutProbability,
+        residualDropoutProbability: residualDropoutProbability,
+        numHeads: numHeads,
+        scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
+        maxPositionEmbeddings: maxPositionEmbeddings,
+      );
+      lnCrossAttention = LayerNorm(
+        normalizedShape: [embedDim],
+        eps: layerNormEpsilon,
+      );
+    }
+
+    return GPT2Block(
+      name: name,
+      ln1: ln1,
+      attention: attn,
+      ln2: ln2,
+      mlp: mlp,
+      crossAttention: crossAttention,
+      lnCrossAttention: lnCrossAttention,
+    );
   }
 
   static Future<GPT2Block> loadFromSafeTensor(
@@ -143,6 +191,7 @@ class GPT2Block extends Module implements SimpleModule {
     String preLayerNormName = 'ln_1',
     String postLayerNormName = 'ln_2',
     String mlpName = 'mlp',
+    String crossAttentionName = 'crossattention',
     required double attentionDropoutProbability,
     required double residualDropoutProbability,
     required int numHeads,
@@ -153,14 +202,13 @@ class GPT2Block extends Module implements SimpleModule {
     required Activation activation,
     required int embedDim,
   }) async {
-    // TODO implement cross attention
     final attn = await GPT2Attention.loadFromSafeTensor(
       loader,
       prefix: '$prefix$attentionName.',
       name: attentionName,
       attentionDropoutProbability: attentionDropoutProbability,
       residualDropoutProbability: residualDropoutProbability,
-      isCrossAttention: isCrossAttention,
+      isCrossAttention: false,
       numHeads: numHeads,
       layerIdx: layerIdx,
       scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
@@ -188,6 +236,32 @@ class GPT2Block extends Module implements SimpleModule {
       activation: activation,
       residualDropoutProbability: residualDropoutProbability,
     );
-    return GPT2Block(name: name, ln1: ln1, attention: attn, ln2: ln2, mlp: mlp);
+
+    GPT2Attention? crossAttention;
+    LayerNorm? lnCrossAttention;
+    if (isCrossAttention) {
+      crossAttention = await GPT2Attention.loadFromSafeTensor(
+        loader,
+        prefix: '$prefix$crossAttentionName.',
+        name: crossAttentionName,
+        layerIdx: layerIdx,
+        attentionDropoutProbability: attentionDropoutProbability,
+        residualDropoutProbability: residualDropoutProbability,
+        numHeads: numHeads,
+        scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
+        maxPositionEmbeddings: maxPositionEmbeddings,
+        isCrossAttention: true,
+      );
+    }
+
+    return GPT2Block(
+      name: name,
+      ln1: ln1,
+      attention: attn,
+      ln2: ln2,
+      mlp: mlp,
+      crossAttention: crossAttention,
+      lnCrossAttention: lnCrossAttention,
+    );
   }
 }

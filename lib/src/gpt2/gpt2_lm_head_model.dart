@@ -13,7 +13,6 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
   @override
   Tensor forward(
     Tensor embeddings, {
-    Tensor? pastKeyValues,
     Tensor? attentionMask,
     Tensor? tokenTypeIds,
     Tensor? positionIds,
@@ -21,29 +20,30 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
     Tensor? inputsEmbeds,
     Tensor? encoderHiddenStates,
     Tensor? labels,
-    bool outputAttentions = false,
-    bool outputHiddenStates = false,
+    List<Tensor>? outputAllSelfAttentions,
+    List<Tensor>? outputAllCrossAttention,
+    List<Tensor>? allHiddenStates,
     required Context context,
   }) {
     context.onloadModule(this);
 
     Tensor hiddenStates = transformer.forward(
       embeddings,
-      pastKeyValues: pastKeyValues,
       attentionMask: attentionMask,
       tokenTypeIds: tokenTypeIds,
       positionIds: positionIds,
       headMask: headMask,
       inputsEmbeds: inputsEmbeds,
       encoderHiddenStates: encoderHiddenStates,
-      outputAttentions: outputAttentions,
-      outputHiddenStates: outputHiddenStates,
+      outputAllSelfAttentions: outputAllSelfAttentions,
+      outputAllCrossAttentions: outputAllCrossAttention,
+      allHiddenStates: allHiddenStates,
       context: context,
     );
 
     Tensor lmLogits = lmHead.forward(hiddenStates, context: context);
 
-    // TODO: Calculate loss if labels are provided
+    // TODO Calculate loss if labels are provided
 
     return lmLogits;
   }
@@ -67,9 +67,11 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
   }) {
     Tensor currentInputIds = inputIds.to(device: context.device);
 
+    Tensor nextInput = currentInputIds;
+
     for (int i = 0; i < maxNewTokens; i++) {
       // Forward pass
-      final logits = forward(currentInputIds, context: context);
+      final logits = forward(nextInput, context: context);
 
       // Get logits for the last token
       // [batch_size, seq_len, vocab_size] -> [batch_size, vocab_size]
@@ -130,7 +132,7 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
 
         final zeros = Tensor.zeros(
           [sortedIndicesToRemove.shape[0], 1],
-          datatype: DataType.int8,
+          dataType: DataType.int8,
           device: context.device,
         );
         final shifted = sortedIndicesToRemove.slice(
@@ -201,12 +203,15 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
 
       // Append to sequence
       currentInputIds = Tensor.cat([currentInputIds, nextToken], dim: 1);
+      nextInput = nextToken;
     }
 
     return currentInputIds;
   }
 
-  void resetKeyValueCache(List<({Tensor? key, Tensor? value})>? keyValueCache) {
+  void resetKeyValueCache({
+    List<({Tensor? key, Tensor? value})>? keyValueCache,
+  }) {
     transformer.resetKeyValueCache(keyValueCache);
   }
 
@@ -287,7 +292,7 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
   static Future<GPT2LMHeadModel> loadFromSafeTensor(
     SafeTensorLoader loader, {
     String prefix = '',
-    required String name,
+    String name = '',
     required GPT2Config config,
     bool isCrossAttention = false,
     String lmHeadName = 'lm_head',

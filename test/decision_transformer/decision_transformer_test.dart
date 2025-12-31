@@ -39,7 +39,7 @@ void main() {
       final timesteps = Tensor.zeros([
         batchSize,
         seqLen,
-      ], datatype: DataType.int64);
+      ], dataType: DataType.int64);
       final attentionMask = Tensor.ones(
         [batchSize, seqLen],
         dataType: DataType.float32,

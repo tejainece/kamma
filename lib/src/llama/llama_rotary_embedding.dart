@@ -30,7 +30,7 @@ class LlamaRotaryEmbedding {
 
     // inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))
     // Tensor.arange(start, end, {step, ...})
-    final indices = Tensor.arange(0, dim, step: 2, datatype: DataType.float32);
+    final indices = Tensor.arange(0, dim, step: 2, dataType: DataType.float32);
     final exponent = indices / dim;
 
     // base ** exponent

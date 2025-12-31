@@ -36,7 +36,7 @@ void main() {
         xDevice,
         routerIndices: Tensor.zeros(
           [1],
-          datatype: DataType.int32,
+          dataType: DataType.int32,
           device: context.device,
         ),
         routingWeights: routingWeights,

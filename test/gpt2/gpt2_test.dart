@@ -26,7 +26,7 @@ void main() {
     final positionIds = Tensor.arange(
       0,
       10,
-      datatype: DataType.int64,
+      dataType: DataType.int64,
     ).unsqueeze(0).expand([batchSize, seqLength]);
 
     final context = Context.best();
@@ -61,17 +61,7 @@ void main() {
 
     final output = attention.forward(hiddenStates, context: context);
 
-    expect(output.outputEmbeddings.shape, [
-      batchSize,
-      seqLength,
-      config.embedDim,
-    ]);
-    expect(output.attentionWeights.shape, [
-      batchSize,
-      config.numHeads,
-      seqLength,
-      seqLength,
-    ]);
+    expect(output.shape, [batchSize, seqLength, config.embedDim]);
   });
 
   test('GPT2MLP forward pass', () {

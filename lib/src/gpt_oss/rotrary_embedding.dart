@@ -63,7 +63,7 @@ class GptOssRotaryEmbedding extends Module {
     // returns [-x2, x1]
     // -x2
     final negX2 =
-        Tensor.zeros(x2.shape, device: x2.device, datatype: x2.dataType) - x2;
+        Tensor.zeros(x2.shape, device: x2.device, dataType: x2.dataType) - x2;
     return Tensor.cat([negX2, x1], dim: -1);
   }
 
@@ -184,7 +184,7 @@ class RoPEInvFreqDefault implements RoPEInvFreq {
     // Computation: exp( (arange(0, dim, 2) / dim) * -log(theta) )
 
     // 1. arange(0, dim, 2)
-    final indices = Tensor.arange(0, dim, step: 2, datatype: DataType.float32);
+    final indices = Tensor.arange(0, dim, step: 2, dataType: DataType.float32);
 
     // 2. indices / dim
     final ratio = indices / dim.toDouble();

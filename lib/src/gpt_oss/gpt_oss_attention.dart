@@ -103,7 +103,7 @@ class GptOssAttention extends Module {
         Tensor.arange(
           0,
           seqLen,
-          datatype: DataType.int64,
+          dataType: DataType.int64,
           device: hiddenStates.device, // Crucial: create on same device
         ).unsqueeze(0).expand([batchSize, seqLen]);
 

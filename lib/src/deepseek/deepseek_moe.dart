@@ -234,7 +234,7 @@ class DeepSeekV3MoE extends Module implements SimpleModule {
       joinedOutput = Tensor.zeros(
         embeddings.shape,
         device: embeddings.device,
-        datatype: embeddings.dataType,
+        dataType: embeddings.dataType,
       );
     }
 

@@ -80,7 +80,7 @@ class Gemma3RotaryEmbedding {
     final headDim = config.headDim;
     final dim = headDim;
 
-    final indices = Tensor.arange(0, dim, step: 2, datatype: DataType.float32);
+    final indices = Tensor.arange(0, dim, step: 2, dataType: DataType.float32);
     final exponent = indices / dim;
 
     final lnBase = math.log(base);
@@ -861,7 +861,7 @@ class Gemma3Model extends Module {
     final positionIds = Tensor.arange(
       0,
       seqLen,
-      datatype: DataType.int64,
+      dataType: DataType.int64,
       device: device,
     ).unsqueeze(0);
     final rotaryEmbeddings = rotaryEmb(hiddenStates, positionIds);

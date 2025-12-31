@@ -16,7 +16,7 @@ class DeepSeekRotaryEmbedding {
     final dim = config.ropeHeadDim; // RoPE is applied only to this dimension
 
     // inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))
-    final indices = Tensor.arange(0, dim, step: 2, datatype: DataType.float32);
+    final indices = Tensor.arange(0, dim, step: 2, dataType: DataType.float32);
     final exponent = indices / dim;
 
     final lnBase = math.log(base);

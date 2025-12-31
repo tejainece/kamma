@@ -99,7 +99,6 @@ void main() {
         model = await GPT2LMHeadModel.loadFromSafeTensor(
           loader,
           prefix: '',
-          name: 'gpt2',
           config: config,
         );
       } else {

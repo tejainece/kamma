@@ -1,10 +1,12 @@
 import 'package:kamma/kamma.dart';
 
+import 'package:kamma/src/gpt2/causal_mask.dart';
+
 class GPT2Model extends Module {
   final EmbeddingLayer wte;
   final EmbeddingLayer wpe;
   final Dropout drop;
-  final List<GPT2Block> h;
+  final List<GPT2Block> blocks;
   final LayerNorm lnF;
 
   GPT2Model({
@@ -12,77 +14,118 @@ class GPT2Model extends Module {
     required this.wte,
     required this.wpe,
     required this.drop,
-    required this.h,
+    required this.blocks,
     required this.lnF,
   }) : assert(wte.embeddingDim == wpe.embeddingDim);
 
+  /// [inputsEmbeds] is of shape (batchSize, seqLength, embedDim)
   Tensor forward(
-    Tensor inputIds, {
-    Tensor? pastKeyValues,
+    Tensor? inputIds, {
     Tensor? attentionMask,
+    // TODO what is this used for
     Tensor? tokenTypeIds,
+    Tensor? cachePositions,
     Tensor? positionIds,
     Tensor? headMask,
     Tensor? inputsEmbeds,
     Tensor? encoderHiddenStates,
-    bool outputAttentions = false,
-    bool outputHiddenStates = false,
+    List<Tensor>? allHiddenStates,
+    List<Tensor>? outputAllSelfAttentions,
+    List<Tensor>? outputAllCrossAttentions,
     required Context context,
   }) {
     context.onloadModule(this);
 
-    // Tensor inputShape = inputIds.shapeTensor;
-    // TODO: Handle inputIds vs inputsEmbeds
-
-    inputsEmbeds ??= wte.forward(inputIds, context: context);
-
-    if (positionIds == null) {
+    int batchSize;
+    if (inputIds != null && inputsEmbeds != null) {
+      throw ArgumentError('inputIds and inputsEmbeds cannot both be provided');
+    } else if (inputIds != null) {
+      // TODO warn_if_padding_and_no_attention_mask
       final inputShape = inputIds.shape;
-      final seqLength = inputShape[1];
-
-      // Create position ids [0, 1, ..., seqLength - 1]
-      positionIds = Tensor.arange(
-        0,
-        seqLength,
-        datatype: DataType.int64,
-        device: inputIds.device,
+      inputIds = inputIds.view([-1, inputShape.last]);
+      // TODO seqLength = inputShape.last;
+      batchSize = inputIds.shape.first;
+    } else if (inputsEmbeds != null) {
+      batchSize = inputsEmbeds.shape.first;
+      // TODO seqLength = inputsEmbeds.shape.last;
+    } else {
+      throw ArgumentError(
+        'You have to specify either inputIds or inputsEmbeds',
       );
-
-      // Expand to batch size: [batch_size, seqLength]
-      positionIds = positionIds.unsqueeze(0).expand(inputShape);
     }
 
+    if (tokenTypeIds != null) {
+      tokenTypeIds = tokenTypeIds.view([-1, tokenTypeIds.shape.last]);
+    }
+
+    inputsEmbeds ??= wte.forward(inputIds!, context: context);
+
+    if (cachePositions == null) {
+      int numProcessedTokens = blocks.first.attention.keyValueCache.seqLength;
+      cachePositions = Tensor.arange(
+        numProcessedTokens,
+        numProcessedTokens + inputsEmbeds.shape[1],
+        device: context.device,
+      );
+    }
+
+    positionIds ??= cachePositions.unsqueeze(0); // TODO expand(inputShape);
+
     Tensor positionEmbeds = wpe.forward(positionIds, context: context);
+    Tensor hiddenStates = inputsEmbeds + positionEmbeds;
+
+    if (attentionMask != null) {
+      attentionMask = attentionMask.view([batchSize, -1]);
+    }
+
+    final seqLength = inputIds?.shape[1] ?? inputsEmbeds!.shape[1];
+
+    // Create causal mask
+    Tensor? causalMask = createCausalMask(
+      batchSize,
+      seqLength,
+      inputsEmbeds.dataType,
+      context.device,
+      method: blocks.first.attention.attentionMethod,
+      pastKeyValuesLength: 0, // TODO support past key values
+      attentionMask: attentionMask,
+    );
 
     if (tokenTypeIds != null) {
       // TODO: Add token type embeddings if wte has them or separate embedding layer
       // GPT2 usually doesn't use token type embeddings in the base model but some variants might
     }
 
-    Tensor hiddenStates = inputsEmbeds + positionEmbeds;
     hiddenStates = drop.forward(hiddenStates, context: context);
 
+    // TODO compute head mask
+
     // TODO: Apply blocks
-    for (final block in h) {
+    for (final block in blocks) {
+      // TODO implement parallelization
+      allHiddenStates?.add(hiddenStates);
       hiddenStates = block.forward(
         hiddenStates,
-        // layerPast: layerPast?[i],
-        attentionMask: attentionMask,
+        // TODO causal mask
+        attentionMask: causalMask,
         headMask: headMask, // TODO: split head mask per layer
         encoderHiddenStates: encoderHiddenStates,
-        outputAttentions: outputAttentions,
+        outputSelfAttentions: outputAllSelfAttentions,
+        outputCrossAttention: outputAllCrossAttentions,
         context: context,
       );
     }
 
     hiddenStates = lnF.forward(hiddenStates, context: context);
+    // TODO we combined batchSize and choiceSize dimension of input. Lets not revert it back for output, so the caller gets expected output shape
+    allHiddenStates?.add(hiddenStates);
 
     return hiddenStates;
   }
 
   void resetKeyValueCache(List<({Tensor? key, Tensor? value})>? keyValueCache) {
-    for (int i = 0; i < h.length; i++) {
-      h[i].resetKeyValueCache(
+    for (int i = 0; i < blocks.length; i++) {
+      blocks[i].resetKeyValueCache(
         key: keyValueCache?[i].key,
         value: keyValueCache?[i].value,
       );
@@ -100,7 +143,7 @@ class GPT2Model extends Module {
     wte.resetParameters();
     wpe.resetParameters();
     // drop.resetParameters();
-    for (final block in h) {
+    for (final block in blocks) {
       block.resetParameters();
     }
     lnF.resetParameters();
@@ -117,7 +160,7 @@ class GPT2Model extends Module {
   };
 
   @override
-  late final Iterable<Module> submodules = [wte, wpe, drop, ...h, lnF];
+  late final Iterable<Module> submodules = [wte, wpe, drop, ...blocks, lnF];
 
   static GPT2Model make({
     required String name,
@@ -185,7 +228,7 @@ class GPT2Model extends Module {
       wte: wte,
       wpe: wpe,
       drop: drop,
-      h: h,
+      blocks: h,
       lnF: lnF,
     );
   }
@@ -251,7 +294,7 @@ class GPT2Model extends Module {
       wte: wte,
       wpe: wpe,
       drop: Dropout(embedDropoutProbability),
-      h: blocks,
+      blocks: blocks,
       lnF: lnF,
     );
   }

@@ -45,7 +45,7 @@ class GptOssModel extends Module {
       positionIds = Tensor.arange(
         0,
         seqLen,
-        datatype: DataType.int64,
+        dataType: DataType.int64,
         device: inputIds.device,
       ).unsqueeze(0).expand([inputIds.shape[0], seqLen]);
     }

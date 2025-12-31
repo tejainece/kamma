@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:universal_io/universal_io.dart';
+
 class GPT2Config {
   final int vocabSize;
   final int nPositions;
@@ -60,5 +64,10 @@ class GPT2Config {
       reorderAndUpcastAttn: json['reorder_and_upcast_attn'] ?? false,
       useCache: json['use_cache'] ?? true,
     );
+  }
+
+  static Future<GPT2Config> fromFile(File configFile) async {
+    final configJson = json.decode(await configFile.readAsString());
+    return GPT2Config.fromJson(configJson);
   }
 }

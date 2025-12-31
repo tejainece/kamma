@@ -41,7 +41,7 @@ class OpenAIGPTModel extends Module {
       positionIds = Tensor.arange(
         0,
         seqLen,
-        datatype: DataType.int64,
+        dataType: DataType.int64,
         device: inputsEmbeds.device,
       );
       // Expand to batch: [1, seqLen] -> [batch, seqLen]

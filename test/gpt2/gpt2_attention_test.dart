@@ -115,7 +115,7 @@ void main() {
             context: context,
           );
 
-          final output = result.outputEmbeddings.to(device: context.device);
+          final output = result.to(device: context.device);
           final diff =
               (output - test.expectedOutputEmbeddings).abs().max().scalar
                   as double;
