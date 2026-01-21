@@ -1,117 +1,62 @@
 import 'dart:math' as math;
-import 'package:tensor/tensor.dart';
-import 'llama_config.dart';
-import 'llama_rotary_embedding.dart';
+import 'package:kamma/kamma.dart';
 
 class LlamaAttention extends Module implements SimpleModule {
-  final LlamaConfig config;
   final int layerIdx;
+  final int numHeads;
 
-  late final int hiddenSize;
-  late final int numHeads;
-  late final int headDim;
-  late final int numKeyValueHeads;
-  late final int numKeyValueGroups;
-  late final int maxPositionEmbeddings;
-  late final double ropeTheta;
-  late final bool isCausal;
-  late final double attentionDropout;
+  final double ropeTheta;
+  final bool isCausal;
 
+  final Dropout attentionDropout;
   final LinearLayer qProj;
   final LinearLayer kProj;
   final LinearLayer vProj;
   final LinearLayer oProj;
+  late final GPT2AttentionMethod attentionMethod;
+  late final AttentionCache keyValueCache;
 
-  LlamaAttention(
-    this.config, {
-    this.layerIdx = 0,
+  LlamaAttention({
+    required super.name,
+    required this.layerIdx,
+    required this.numHeads,
+    required this.attentionDropout,
+    required int maxPositionEmbeddings,
+    required this.ropeTheta,
     required this.qProj,
     required this.kProj,
     required this.vProj,
     required this.oProj,
-  }) : super(name: 'llama_attention') {
-    hiddenSize = config.hiddenSize;
-    numHeads = config.numAttentionHeads;
-    headDim = config.headDim;
-    numKeyValueHeads = config.numKeyValueHeads;
-    numKeyValueGroups = numHeads ~/ numKeyValueHeads;
-    maxPositionEmbeddings = config.maxPositionEmbeddings;
-    ropeTheta = config.ropeTheta;
-    isCausal = true; // Llama is causal
-    attentionDropout = config.attentionDropout;
+    required this.isCausal,
+    required GPT2AttentionMethodType attentionMethod,
+  }) {
+    if ((headDim * numHeads) != embedDim) {
+      throw Exception('embedDim must be divisible by num_heads');
+    }
 
-    if ((headDim * numHeads) != hiddenSize) {
-      throw Exception('hidden_size must be divisible by num_heads');
+    if (attentionMethod == GPT2AttentionMethodType.pagedAttention) {
+      throw UnimplementedError("Paged Attention is not implemented yet.");
+    }
+    /* TODO this.attentionMethod = GPT2AttentionMethod.make(
+      attentionMethod,
+      scaleFactor: scaleFactor,
+      isCausal: !isCrossAttention,
+      attnDropout: attentionDropout,
+      maxPositionEmbeddings: maxPositionEmbeddings,
+    );*/
+    if (attentionMethod != GPT2AttentionMethodType.pagedAttention) {
+      keyValueCache = AttentionCache.empty();
+    } else {
+      // TODO intialize cache for paged attention
+      throw UnimplementedError("Paged Attention is not implemented yet.");
     }
   }
 
-  static LlamaAttention make(LlamaConfig config, {int layerIdx = 0}) {
-    final hiddenSize = config.hiddenSize;
-    final numHeads = config.numAttentionHeads;
-    final headDim = config.headDim ?? (hiddenSize ~/ numHeads);
-    final numKeyValueHeads = config.numKeyValueHeads ?? numHeads;
+  int get embedDim => qProj.numInFeatures;
+  int get headDim => embedDim ~/ numHeads;
 
-    return LlamaAttention(
-      config,
-      layerIdx: layerIdx,
-      qProj: LinearLayer.make(
-        name: 'q_proj',
-        inFeatures: hiddenSize,
-        outFeatures: numHeads * headDim,
-        hasBias: config.attentionBias,
-      ),
-      kProj: LinearLayer.make(
-        name: 'k_proj',
-        inFeatures: hiddenSize,
-        outFeatures: numKeyValueHeads * headDim,
-        hasBias: config.attentionBias,
-      ),
-      vProj: LinearLayer.make(
-        name: 'v_proj',
-        inFeatures: hiddenSize,
-        outFeatures: numKeyValueHeads * headDim,
-        hasBias: config.attentionBias,
-      ),
-      oProj: LinearLayer.make(
-        name: 'o_proj',
-        inFeatures: numHeads * headDim,
-        outFeatures: hiddenSize,
-        hasBias: config.attentionBias,
-      ),
-    );
-  }
-
-  static Future<LlamaAttention> loadFromSafeTensor(
-    SafeTensorLoader loader,
-    LlamaConfig config, {
-    required String prefix,
-    int layerIdx = 0,
-  }) async {
-    return LlamaAttention(
-      config,
-      layerIdx: layerIdx,
-      qProj: await LinearLayer.loadFromSafeTensor(
-        loader,
-        prefix: '${prefix}q_proj.',
-        name: 'q_proj',
-      ),
-      kProj: await LinearLayer.loadFromSafeTensor(
-        loader,
-        prefix: '${prefix}k_proj.',
-        name: 'k_proj',
-      ),
-      vProj: await LinearLayer.loadFromSafeTensor(
-        loader,
-        prefix: '${prefix}v_proj.',
-        name: 'v_proj',
-      ),
-      oProj: await LinearLayer.loadFromSafeTensor(
-        loader,
-        prefix: '${prefix}o_proj.',
-        name: 'o_proj',
-      ),
-    );
-  }
+  int get numKeyValueHeads => kProj.numOutFeatures ~/ headDim;
+  int get numKeyValueGroups => numHeads ~/ numKeyValueHeads;
 
   @override
   Tensor forward(
@@ -119,28 +64,28 @@ class LlamaAttention extends Module implements SimpleModule {
     required Context context,
     Tensor? attentionMask,
     Tensor? positionIds,
-    (Tensor, Tensor)? positionEmbeddings, // (cos, sin)
+    ({Tensor cos, Tensor sin})? positionEmbeddings,
     bool useCache = false,
     // Cache object? For now simplistic
   }) {
     context.onloadModule(this);
 
-    final bsz = embeddings.shape[0];
+    final batchSize = embeddings.shape[0];
     final qLen = embeddings.shape[1];
 
     final queryStates = qProj
         .forward(embeddings, context: context)
-        .view([bsz, qLen, numHeads, headDim])
+        .view([batchSize, qLen, numHeads, headDim])
         .transpose(1, 2);
 
     final keyStates = kProj
         .forward(embeddings, context: context)
-        .view([bsz, qLen, numKeyValueHeads, headDim])
+        .view([batchSize, qLen, numKeyValueHeads, headDim])
         .transpose(1, 2);
 
     Tensor valueStates = vProj
         .forward(embeddings, context: context)
-        .view([bsz, qLen, numKeyValueHeads, headDim])
+        .view([batchSize, qLen, numKeyValueHeads, headDim])
         .transpose(1, 2);
 
     // Apply RoPE
@@ -148,13 +93,22 @@ class LlamaAttention extends Module implements SimpleModule {
     Tensor k = keyStates;
 
     if (positionEmbeddings != null) {
-      final (cos, sin) = positionEmbeddings;
-      final (qRot, kRot) = applyRotaryPosEmb(q, k, cos, sin);
-      q = qRot;
-      k = kRot;
+      final (:cos, :sin) = positionEmbeddings;
+      final (:qEmbed, :kEmbed) = LlamaRotaryEmbedding.applyRotaryPosEmb(
+        q,
+        k,
+        cos,
+        sin,
+      );
+      q = qEmbed;
+      k = kEmbed;
     }
 
-    // TODO: KV Caching updates (omitted for initial implementation)
+    if (useCache) {
+      keyValueCache.update(newKey: k, newValue: valueStates);
+      k = keyValueCache.key;
+      valueStates = keyValueCache.value;
+    }
 
     // Repeat KV if GQA
     if (numKeyValueGroups > 1) {
@@ -186,9 +140,9 @@ class LlamaAttention extends Module implements SimpleModule {
     final attnOutput = attnScores.matmul(v);
 
     final output = attnOutput.transpose(1, 2).contiguous().view([
-      bsz,
+      batchSize,
       qLen,
-      hiddenSize,
+      embedDim,
     ]);
 
     return oProj.forward(output, context: context);
@@ -212,8 +166,120 @@ class LlamaAttention extends Module implements SimpleModule {
   Map<String, dynamic> get meta => {
     'numHeads': numHeads,
     'headDim': headDim,
-    'hiddenSize': hiddenSize,
+    'embedDim': embedDim,
   };
+
+  static LlamaAttention make({
+    required String name,
+    required int layerIdx,
+    required int numHeads,
+    required int embedDim,
+    required int maxPositionEmbeddings,
+    required double ropeTheta,
+    required bool hasAttentionBias,
+    required int numKeyValueHeads,
+    required double attentionDropoutProb,
+    required bool isCausal,
+    GPT2AttentionMethodType attentionMethod = GPT2AttentionMethodType.sdap,
+    String qProjName = 'q_proj',
+    String kProjName = 'k_proj',
+    String vProjName = 'v_proj',
+    String oProjName = 'o_proj',
+  }) {
+    int headDim = embedDim ~/ numHeads;
+    return LlamaAttention(
+      name: name,
+      layerIdx: layerIdx,
+      numHeads: numHeads,
+      maxPositionEmbeddings: maxPositionEmbeddings,
+      ropeTheta: ropeTheta,
+      isCausal: isCausal,
+      attentionDropout: Dropout(
+        attentionDropoutProb,
+        name: 'attention_dropout',
+      ),
+      attentionMethod: attentionMethod,
+      qProj: LinearLayer.make(
+        name: qProjName,
+        inFeatures: embedDim,
+        outFeatures: numHeads * headDim,
+        hasBias: hasAttentionBias,
+      ),
+      kProj: LinearLayer.make(
+        name: kProjName,
+        inFeatures: embedDim,
+        outFeatures: numKeyValueHeads * headDim,
+        hasBias: hasAttentionBias,
+      ),
+      vProj: LinearLayer.make(
+        name: vProjName,
+        inFeatures: embedDim,
+        outFeatures: numKeyValueHeads * headDim,
+        hasBias: hasAttentionBias,
+      ),
+      oProj: LinearLayer.make(
+        name: oProjName,
+        inFeatures: numHeads * headDim,
+        outFeatures: embedDim,
+        hasBias: hasAttentionBias,
+      ),
+    );
+  }
+
+  static Future<LlamaAttention> loadFromSafeTensor(
+    SafeTensorLoader loader, {
+    required String prefix,
+    required String name,
+    required int layerIdx,
+    required int numHeads,
+    required double attentionDropoutProb,
+    required int maxPositionEmbeddings,
+    required double ropeTheta,
+    required bool isCausal,
+    GPT2AttentionMethodType attentionMethod = GPT2AttentionMethodType.sdap,
+    String qProjName = 'q_proj',
+    String kProjName = 'k_proj',
+    String vProjName = 'v_proj',
+    String oProjName = 'o_proj',
+  }) async {
+    return LlamaAttention(
+      layerIdx: layerIdx,
+      numHeads: numHeads,
+      name: name,
+      maxPositionEmbeddings: maxPositionEmbeddings,
+      ropeTheta: ropeTheta,
+      isCausal: isCausal,
+      attentionDropout: Dropout(
+        attentionDropoutProb,
+        name: 'attention_dropout',
+      ),
+      attentionMethod: attentionMethod,
+      qProj: await LinearLayer.loadFromSafeTensor(
+        loader,
+        prefix: '$prefix$qProjName.',
+        name: qProjName,
+      ),
+      kProj: await LinearLayer.loadFromSafeTensor(
+        loader,
+        prefix: '$prefix$kProjName.',
+        name: kProjName,
+      ),
+      vProj: await LinearLayer.loadFromSafeTensor(
+        loader,
+        prefix: '$prefix$vProjName.',
+        name: vProjName,
+      ),
+      oProj: await LinearLayer.loadFromSafeTensor(
+        loader,
+        prefix: '$prefix$oProjName.',
+        name: oProjName,
+      ),
+    );
+  }
+
+  void resetKeyValueCache() {
+    keyValueCache.reset();
+  }
 }
 
 // Helper to repeat KV heads

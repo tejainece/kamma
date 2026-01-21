@@ -18,7 +18,7 @@ Tensor? createCausalMask(
     seqLength,
     dataType,
     device,
-    pastKeyValuesLength: pastKeyValuesLength,
+    numSeenTokens: pastKeyValuesLength,
     attentionMask: attentionMask,
   );
 

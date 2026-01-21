@@ -11,11 +11,11 @@ export 'gpt2_lm_head_model.dart';
 export 'gpt2_tokenizer.dart';
 export 'attention_methods.dart';
 
-class GPT2Prompter extends Module {
+class GPT2 extends Module {
   final GPT2Tokenizer tokenizer;
   final GPT2LMHeadModel model;
 
-  GPT2Prompter({super.name = '', required this.tokenizer, required this.model});
+  GPT2({super.name = '', required this.tokenizer, required this.model});
 
   @override
   final Map<String, dynamic> meta = const {};
@@ -32,21 +32,27 @@ class GPT2Prompter extends Module {
   late final Iterable<Module> submodules = [model];
 
   // TODO sync with the transformers library implementation
-  String prompt(String prompt, {required Context context}) {
-    // TODO perform this inside model?
-    model.resetKeyValueCache();
-
+  String prompt(
+    String prompt, {
+    required Context context,
+    int maxNewTokens = 20,
+    double temperature = 1.0,
+    int topK = 0,
+    double topP = 1.0,
+  }) {
     final inputIds = tokenizer.encode(prompt);
     final outputIds = model.generate(
       inputIds,
-      maxNewTokens: 20, // TODO
-      temperature: 0.0, // TODO
+      maxNewTokens: maxNewTokens,
+      temperature: temperature,
+      topK: topK,
+      topP: topP,
       context: context,
     );
     return tokenizer.decode(outputIds);
   }
 
-  static Future<GPT2Prompter> loadFromDirectory(
+  static Future<GPT2> loadFromDirectory(
     String modelDir, {
     String prefix = '',
   }) async {
@@ -61,6 +67,6 @@ class GPT2Prompter extends Module {
       loader,
       config: config,
     );
-    return GPT2Prompter(tokenizer: tokenizer, model: model);
+    return GPT2(tokenizer: tokenizer, model: model);
   }
 }

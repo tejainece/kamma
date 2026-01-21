@@ -66,6 +66,49 @@ class GPT2Config {
     );
   }
 
+  GPT2Config copyWith({
+    int? vocabSize,
+    int? nPositions,
+    int? embedDim,
+    int? numLayers,
+    int? numHeads,
+    int? mlpInnerDim,
+    String? activationFunction,
+    double? residualDropoutProbability,
+    double? embedDropoutProbability,
+    double? attentionDropoutProbability,
+    double? layerNormEpsilon,
+    bool? scaleAttnWeights,
+    bool? scaleAttnByInverseLayerIdx,
+    bool? reorderAndUpcastAttn,
+    bool? useCache,
+    int? maxPositionEmbeddings,
+  }) {
+    return GPT2Config(
+      vocabSize: vocabSize ?? this.vocabSize,
+      nPositions: nPositions ?? this.nPositions,
+      embedDim: embedDim ?? this.embedDim,
+      numLayers: numLayers ?? this.numLayers,
+      numHeads: numHeads ?? this.numHeads,
+      mlpInnerDim: mlpInnerDim ?? this.mlpInnerDim,
+      activationFunction: activationFunction ?? this.activationFunction,
+      residualDropoutProbability:
+          residualDropoutProbability ?? this.residualDropoutProbability,
+      embedDropoutProbability:
+          embedDropoutProbability ?? this.embedDropoutProbability,
+      attentionDropoutProbability:
+          attentionDropoutProbability ?? this.attentionDropoutProbability,
+      layerNormEpsilon: layerNormEpsilon ?? this.layerNormEpsilon,
+      scaleAttnWeights: scaleAttnWeights ?? this.scaleAttnWeights,
+      scaleAttnByInverseLayerIdx:
+          scaleAttnByInverseLayerIdx ?? this.scaleAttnByInverseLayerIdx,
+      reorderAndUpcastAttn: reorderAndUpcastAttn ?? this.reorderAndUpcastAttn,
+      useCache: useCache ?? this.useCache,
+      maxPositionEmbeddings:
+          maxPositionEmbeddings ?? this.maxPositionEmbeddings,
+    );
+  }
+
   static Future<GPT2Config> fromFile(File configFile) async {
     final configJson = json.decode(await configFile.readAsString());
     return GPT2Config.fromJson(configJson);

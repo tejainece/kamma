@@ -1,102 +1,34 @@
 import 'package:tensor/tensor.dart';
-import 'llama_config.dart';
 
 class LlamaMLP extends Module implements SimpleModule {
-  final LlamaConfig config;
-  final int hiddenSize;
-  final int intermediateSize;
+  final Activation activation;
   final LinearLayer gateProj;
   final LinearLayer upProj;
   final LinearLayer downProj;
 
-  LlamaMLP(
-    this.config, {
+  LlamaMLP({
+    required super.name,
+    required this.activation,
     required this.gateProj,
     required this.upProj,
     required this.downProj,
-  }) : hiddenSize = config.hiddenSize,
-       intermediateSize = config.intermediateSize,
-       super(name: 'llama_mlp');
+  });
 
-  static LlamaMLP make(LlamaConfig config) {
-    final hiddenSize = config.hiddenSize;
-    final intermediateSize = config.intermediateSize;
+  int get embedDim => gateProj.numInFeatures;
 
-    return LlamaMLP(
-      config,
-      gateProj: LinearLayer.make(
-        name: 'gate_proj',
-        inFeatures: hiddenSize,
-        outFeatures: intermediateSize,
-        hasBias: config.mlpBias,
-      ),
-      upProj: LinearLayer.make(
-        name: 'up_proj',
-        inFeatures: hiddenSize,
-        outFeatures: intermediateSize,
-        hasBias: config.mlpBias,
-      ),
-      downProj: LinearLayer.make(
-        name: 'down_proj',
-        inFeatures: intermediateSize,
-        outFeatures: hiddenSize,
-        hasBias: config.mlpBias,
-      ),
-    );
-  }
-
-  static Future<LlamaMLP> loadFromSafeTensor(
-    SafeTensorLoader loader,
-    LlamaConfig config, {
-    required String prefix,
-  }) async {
-    return LlamaMLP(
-      config,
-      gateProj: await LinearLayer.loadFromSafeTensor(
-        loader,
-        prefix: '${prefix}gate_proj.',
-        name: 'gate_proj',
-      ),
-      upProj: await LinearLayer.loadFromSafeTensor(
-        loader,
-        prefix: '${prefix}up_proj.',
-        name: 'up_proj',
-      ),
-      downProj: await LinearLayer.loadFromSafeTensor(
-        loader,
-        prefix: '${prefix}down_proj.',
-        name: 'down_proj',
-      ),
-    );
-  }
+  int get intermediateSize => gateProj.numOutFeatures;
 
   @override
   Tensor forward(Tensor embeddings, {required Context context}) {
     context.onloadModule(this);
 
-    final gate = gateProj.forward(embeddings, context: context);
-    final up = upProj.forward(embeddings, context: context);
+    Tensor input = embeddings;
 
-    Tensor activated;
-    if (config.hiddenAct == 'silu') {
-      activated = gate.silu();
-    } else if (config.hiddenAct == 'relu') {
-      activated = gate.relu();
-    } else if (config.hiddenAct == 'gelu') {
-      activated = gate.gelu(GeluApporimate.none);
-    } else {
-      // Fallback for swish or others
-      if (config.hiddenAct == 'swish') {
-        activated = gate.silu();
-      } else {
-        throw UnimplementedError(
-          "Activation ${config.hiddenAct} not supported yet in LlamaMLP",
-        );
-      }
-    }
-
-    final intermediate = activated * up;
-    return downProj.forward(intermediate, context: context);
+    embeddings = gateProj.forward(embeddings, context: context);
+    embeddings = activation.forward(embeddings, context: context);
+    embeddings = embeddings * upProj.forward(input, context: context);
+    embeddings = downProj.forward(embeddings, context: context);
+    return embeddings;
   }
 
   @override
@@ -114,8 +46,66 @@ class LlamaMLP extends Module implements SimpleModule {
 
   @override
   Map<String, dynamic> get meta => {
-    'hiddenSize': hiddenSize,
+    'embedDim': embedDim,
     'intermediateSize': intermediateSize,
-    'activation': config.hiddenAct,
+    'activation': activation.name,
   };
+
+  static LlamaMLP make({
+    String name = 'mlp',
+    required int embedDim,
+    required int intermediateSize,
+    required Activation activation,
+    bool hasBias = false,
+  }) {
+    return LlamaMLP(
+      name: name,
+      activation: activation,
+      gateProj: LinearLayer.make(
+        name: 'gate_proj',
+        inFeatures: embedDim,
+        outFeatures: intermediateSize,
+        hasBias: hasBias,
+      ),
+      upProj: LinearLayer.make(
+        name: 'up_proj',
+        inFeatures: embedDim,
+        outFeatures: intermediateSize,
+        hasBias: hasBias,
+      ),
+      downProj: LinearLayer.make(
+        name: 'down_proj',
+        inFeatures: intermediateSize,
+        outFeatures: embedDim,
+        hasBias: hasBias,
+      ),
+    );
+  }
+
+  static Future<LlamaMLP> loadFromSafeTensor(
+    SafeTensorLoader loader, {
+    String name = 'mlp',
+    required String prefix,
+    required Activation activation,
+  }) async {
+    return LlamaMLP(
+      name: name,
+      activation: activation,
+      gateProj: await LinearLayer.loadFromSafeTensor(
+        loader,
+        prefix: '${prefix}gate_proj.',
+        name: 'gate_proj',
+      ),
+      upProj: await LinearLayer.loadFromSafeTensor(
+        loader,
+        prefix: '${prefix}up_proj.',
+        name: 'up_proj',
+      ),
+      downProj: await LinearLayer.loadFromSafeTensor(
+        loader,
+        prefix: '${prefix}down_proj.',
+        name: 'down_proj',
+      ),
+    );
+  }
 }

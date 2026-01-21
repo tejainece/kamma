@@ -9,10 +9,16 @@ enum GPT2AttentionMethodType {
   flexAttention,
   pagedAttention,
   sdpaPaged,
-  eagerPaged,
+  eagerPaged;
+
+  static GPT2AttentionMethodType parse(String name) {
+    return GPT2AttentionMethodType.values.firstWhere(
+      (type) => type.name == name,
+      orElse: () => throw ArgumentError('Unknown GPT2AttentionFuncType: $name'),
+    );
+  }
 }
 
-// TODO see if this can be reused for other models
 abstract class GPT2AttentionMethod implements Module {
   GPT2AttentionMethodType get type;
 
@@ -37,10 +43,12 @@ abstract class GPT2AttentionMethod implements Module {
   /// [createCausalMask] uses this method to compute [GPT2AttentionMethodType] specific mask.
   CausalMask? makeCausalMask(
     int batchSize,
+
+    /// Number of new tokens to process.
     int qLen,
     DataType dataType,
     Device device, {
-    int pastKeyValuesLength = 0,
+    int numSeenTokens = 0,
     Tensor? attentionMask,
   });
 
@@ -146,16 +154,11 @@ class GPT2AttentionMethodEagerUpscale extends Module
     super.name = 'gpt2_attention_func_eager',
   }) : premadeCausalMask = Tensor.ones(
          [maxPositionEmbeddings, maxPositionEmbeddings],
-         dataType: DataType.boolean,
+         dataType: DataType.float32,
        ).tril().view([1, 1, maxPositionEmbeddings, maxPositionEmbeddings]);
 
   @override
-  /// Create a 4D float mask of shape `(batch_size, 1, query_length, kv_length)` where a value of 0 indicates that
-  /// the element should take part in the attention computation, and -inf (minimum value for the given `dtype`) that
-  /// it should not.
-  ///
-  /// TODO document when [attentionMask] is provided
-  /// TODO document when [attentionMask] is used
+  /// Create a 4D float mask of shape (batch_size, 1 (broadcasts to num heads), query_length, kv_length) where a value of 0 indicates that the element should take part in the attention computation, and -inf (minimum value for the given `dtype`) that it should not.
   CausalMask? makeCausalMask(
     int batchSize,
 
@@ -163,37 +166,40 @@ class GPT2AttentionMethodEagerUpscale extends Module
     int qLen,
     DataType dataType,
     Device device, {
-    int pastKeyValuesLength = 0,
+    int numSeenTokens = 0,
+
+    /// 2D vector of shape ([batchSize], [numSeenTokens] + [qLen]) where 0 indicates padding and 1 indicates valid tokens.
     Tensor? attentionMask,
   }) {
     final minVal = dataType.fInfo.min;
-    final targetLength = qLen;
-    final kvLen = qLen + pastKeyValuesLength;
+    final kvLen = qLen + numSeenTokens;
 
     final rangeRow = Tensor.arange(
       0,
-      targetLength,
+      qLen,
       device: device,
-    ).view([targetLength, 1]);
-    final rangeCol = Tensor.arange(0, kvLen, device: device).view([1, kvLen]);
+      dataType: DataType.float32,
+    ).view([qLen, 1]);
+    final rangeCol = Tensor.arange(
+      0,
+      kvLen,
+      device: device,
+      dataType: DataType.float32,
+    ).view([1, kvLen]);
 
-    final maskCondition = rangeCol.gt(rangeRow + pastKeyValuesLength);
+    final maskCondition = rangeCol.gt(rangeRow + numSeenTokens);
 
     Tensor causalMask = Tensor.zeros(
-      [targetLength, kvLen],
+      [qLen, kvLen],
       device: device,
       dataType: dataType,
     );
-
     causalMask = causalMask.maskedFill(maskCondition, minVal);
-    causalMask = causalMask.view([1, 1, targetLength, kvLen]);
-
-    // Match transformers behavior: expand to batch size
+    causalMask = causalMask.view([1, 1, qLen, kvLen]);
     if (batchSize > 1) {
-      causalMask = causalMask.expand([batchSize, 1, targetLength, kvLen]);
+      causalMask = causalMask.expand([batchSize, 1, qLen, kvLen]);
     }
 
-    // 2. Combine with Attention Mask if provided
     if (attentionMask != null) {
       if (attentionMask.shape.length == 2) {
         Tensor extAttentionMask = attentionMask.view([batchSize, 1, 1, kvLen]);
@@ -234,9 +240,9 @@ class GPT2AttentionMethodEagerUpscale extends Module
     final [_, _, kSeqLength, _] = key.shape;
 
     // Preallocate attention weights tensor. Will be populated by baddbmm
-    Tensor attentionWeights = Tensor.empty(
+    Tensor attentionWeights = Tensor.zeros(
       [batchSize * numHeads, qSeqLength, kSeqLength],
-      datatype: DataType.float32,
+      dataType: DataType.float32,
       device: context.device,
     );
 
@@ -259,19 +265,22 @@ class GPT2AttentionMethodEagerUpscale extends Module
 
     // Apply causal mask. Cross-attention is only performed on encoder-decoder transformer.
     // For encoder-decoder transformer, causal mask is not applied.
+    // Add causal mask (additive mask: 0 for keep, -inf for mask)
     if (isCausal) {
-      final causalMask = premadeCausalMask.index([
-        // Calculate for all batches
-        .all,
-        // Calculate for all heads
-        .all,
-        // Mask for query
-        // During inference of decoder-only transformer, only the last token is processed (qSeqLength = 1).
-        // During training of decoder-only transformer, qSeqLength = kSeqLength.
-        .slice(kSeqLength - qSeqLength, kSeqLength),
-        // Mask for key
-        .to(kSeqLength),
-      ]);
+      final causalMask = premadeCausalMask
+          .index([
+            // Calculate for all batches
+            .all,
+            // Calculate for all heads
+            .all,
+            // Mask for query
+            // During inference of decoder-only transformer, only the last token is processed (qSeqLength = 1).
+            // During training of decoder-only transformer, qSeqLength = kSeqLength.
+            .slice(kSeqLength - qSeqLength, kSeqLength),
+            // Mask for key
+            .till(kSeqLength),
+          ])
+          .to(device: context.device);
       // mask is 1 where we want to keep, 0 where we want to mask
       attentionWeights = attentionWeights.maskedFill(
         causalMask.eq(0),
@@ -298,7 +307,7 @@ class GPT2AttentionMethodEagerUpscale extends Module
     }
 
     Tensor attentionOutput = attentionWeights.matmul(value);
-    attentionOutput = attentionOutput.transpose(1, 2);
+    // attentionOutput = attentionOutput.transpose(1, 2);
 
     return (
       attentionOutput: attentionOutput,
@@ -346,7 +355,7 @@ class GPT2AttentionMethodEager extends Module implements GPT2AttentionMethod {
     super.name = 'gpt2_attention_func_eager',
   }) : premadeCausalMask = Tensor.ones(
          [maxPositionEmbeddings, maxPositionEmbeddings],
-         dataType: DataType.boolean,
+         dataType: DataType.float32,
        ).tril().view([1, 1, maxPositionEmbeddings, maxPositionEmbeddings]);
 
   @override
@@ -355,14 +364,12 @@ class GPT2AttentionMethodEager extends Module implements GPT2AttentionMethod {
     int qLen,
     DataType dataType,
     Device device, {
-    int pastKeyValuesLength = 0,
+    int numSeenTokens = 0,
     Tensor? attentionMask,
   }) {
-    // Eager Attention also uses float mask
     final minVal = dataType.fInfo.min;
-    final sourceLength = qLen + pastKeyValuesLength;
+    final sourceLength = qLen + numSeenTokens;
 
-    // 1. Create base causal mask
     final rangeRow = Tensor.arange(
       0,
       qLen,
@@ -375,27 +382,19 @@ class GPT2AttentionMethodEager extends Module implements GPT2AttentionMethod {
       device: device,
       dataType: DataType.float32,
     ).view([1, sourceLength]);
-
-    // mask logic: j > i + pastKeyValuesLength => mask
-    final maskCondition = rangeCol.gt(
-      rangeRow + pastKeyValuesLength.toDouble(),
-    );
+    final maskCondition = rangeCol.gt(rangeRow + numSeenTokens);
 
     Tensor causalMask = Tensor.zeros(
       [qLen, sourceLength],
       device: device,
       dataType: dataType,
     );
-
     causalMask = causalMask.maskedFill(maskCondition, minVal);
     causalMask = causalMask.view([1, 1, qLen, sourceLength]);
-
-    // Match transformers behavior: expand to batch size
     if (batchSize > 1) {
       causalMask = causalMask.expand([batchSize, 1, qLen, sourceLength]);
     }
 
-    // 2. Combine with Attention Mask if provided
     if (attentionMask != null) {
       if (attentionMask.shape.length == 2) {
         Tensor extAttentionMask = attentionMask.view([
@@ -452,14 +451,14 @@ class GPT2AttentionMethodEager extends Module implements GPT2AttentionMethod {
             // During training of decoder-only transformer, qSeqLength = kSeqLength.
             .slice(kSeqLength - qSeqLength, kSeqLength),
             // Mask for key
-            .to(kSeqLength),
+            .till(kSeqLength),
           ])
           .to(device: context.device);
       // mask is 1 where we want to keep, 0 where we want to mask
       // maskedFill fills where mask is 1 (True).
       // So we want to fill where causalMask is 0.
       attentionWeights = attentionWeights.maskedFill(
-        causalMask.bitwiseNot(),
+        causalMask.eq(0),
         attentionWeights.dataType.fInfo.min,
       );
     }
@@ -469,6 +468,11 @@ class GPT2AttentionMethodEager extends Module implements GPT2AttentionMethod {
     }
 
     attentionWeights = attentionWeights.softmax(-1);
+
+    if (attentionWeights.dataType != value.dataType) {
+      attentionWeights = attentionWeights.to(dataType: value.dataType);
+    }
+
     attentionWeights = attnDropout.forward(attentionWeights, context: context);
 
     if (headMask != null) {
@@ -521,48 +525,32 @@ class GPT2AttentionMethodSDAP extends Module implements GPT2AttentionMethod {
   });
 
   @override
-  /// Create a 4D boolean mask of shape `(batch_size, 1, query_length, kv_length)` where a value of True indicates that the element should take part in the attention computation, and False that it should not.
+  /// Create a 4D float mask of shape `(batch_size, 1, query_length, kv_length)` which is additive (0 for keep, -inf for mask).
   CausalMask? makeCausalMask(
     int batchSize,
     int qLen,
     DataType dataType,
     Device device, {
-    int pastKeyValuesLength = 0,
+    int numSeenTokens = 0,
     Tensor? attentionMask,
   }) {
-    // SDAP uses boolean mask
+    // SDAP usually can handle boolean mask, but we found issues.
+    // Switching to float additive mask (like Eager) to ensure compatibility.
+
     // If fully causal and no padding mask, we can often skip the mask (return null to let SDPA use is_causal=True)
-    // Checks based on transformers internal logic:
-    // 1. If attention_mask is != null (padding), we usually need a mask unless we can slice it.
-    //    For now, if attention_mask is present, we create a boolean mask.
-    // 2. If seqLength == 1 (generation step), and fully causal, we might not need a mask if we use is_causal=True,
-    //    but SDPA is_causal=True expects full causal.
-    //    However, usually we pass a mask if we have padding or complex cases.
-
-    // Logic:
-    // If attentionMask is NULL and we are casual, we *might* return null to use isCausal=true in implementation.
-    // However, the caller expects a mask to pass to perform.
-    // In perform, we see: `attnMask: attentionMask`.
-    // If we return null here, `perform` gets null.
-    // `perform` uses `isCausal: isCausal`.
-    // So if we return null, SDPA will use isCausal=True (if set).
-
-    if (attentionMask == null && isCausal) {
-      // Optimization: return null to use optimized kernels
+    if (attentionMask == null && isCausal && numSeenTokens == 0) {
       return null;
     }
 
-    final targetLength = qLen;
-    final sourceLength = qLen + pastKeyValuesLength;
+    final minVal = dataType.fInfo.min;
+    final sourceLength = qLen + numSeenTokens;
 
-    // Create boolean mask: True for keep, False for mask
-    // Indices
     final rangeRow = Tensor.arange(
       0,
-      targetLength,
+      qLen,
       device: device,
       dataType: DataType.float32,
-    ).view([targetLength, 1]);
+    ).view([qLen, 1]);
     final rangeCol = Tensor.arange(
       0,
       sourceLength,
@@ -571,37 +559,47 @@ class GPT2AttentionMethodSDAP extends Module implements GPT2AttentionMethod {
     ).view([1, sourceLength]);
 
     // Keep condition: j <= i + pastKeyValuesLength
-    Tensor mask = rangeCol
-        .gt(rangeRow + pastKeyValuesLength.toDouble())
-        .bitwiseNot();
+    // We want to Mask where j > i + pastKeyValuesLength
+    final maskCondition = rangeCol.gt(rangeRow + numSeenTokens);
 
-    // Add padding mask
-    if (attentionMask != null) {
-      // attentionMask (batch, sourceDesc) -> usually 1 for keep, 0 for mask.
-      // Boolean: True for keep, False for mask.
-      Tensor boolAttnMask;
-      if (attentionMask.dataType == DataType.boolean) {
-        boolAttnMask = attentionMask;
-      } else {
-        boolAttnMask = attentionMask.eq(1);
-      }
+    Tensor causalMask = Tensor.zeros(
+      [qLen, sourceLength],
+      device: device,
+      dataType: dataType,
+    );
+    // Fill mask where condition is True (Future) with minVal
+    causalMask = causalMask.maskedFill(maskCondition, minVal);
+    causalMask = causalMask.view([1, 1, qLen, sourceLength]);
 
-      if (boolAttnMask.shape.length == 2) {
-        // (batch, source) -> (batch, 1, 1, source)
-        boolAttnMask = boolAttnMask.view([batchSize, 1, 1, sourceLength]);
-      }
-
-      // Combine: must be kept by BOTH (AND)
-      // mask is (1, 1, target, source) [implicitly broadcasted from (target, source)]
-      // We view mask as (1, 1, target, source)
-      mask = mask.view([1, 1, targetLength, sourceLength]);
-
-      mask = mask.bitwiseAnd(boolAttnMask);
-    } else {
-      mask = mask.view([1, 1, targetLength, sourceLength]);
+    if (batchSize > 1) {
+      causalMask = causalMask.expand([batchSize, 1, qLen, sourceLength]);
     }
 
-    return SimpleCausalMask(mask);
+    if (attentionMask != null) {
+      if (attentionMask.shape.length == 2) {
+        Tensor extAttentionMask = attentionMask.view([
+          batchSize,
+          1,
+          1,
+          sourceLength,
+        ]);
+        extAttentionMask = extAttentionMask.to(dataType: dataType);
+        extAttentionMask =
+            (Tensor.ones(
+                  extAttentionMask.shape,
+                  device: device,
+                  dataType: dataType,
+                ) -
+                extAttentionMask) *
+            minVal;
+        causalMask = causalMask + extAttentionMask;
+      } else if (attentionMask.shape.length == 4) {
+        // If it is already 4D, we assume it is prepared
+        causalMask = causalMask + attentionMask;
+      }
+    }
+
+    return SimpleCausalMask(causalMask.contiguous());
   }
 
   @override
@@ -704,13 +702,13 @@ class GPT2AttentionMethodFlashAttention2 extends GPT2AttentionMethodSDAP {
     int qLen,
     DataType dataType,
     Device device, {
-    int pastKeyValuesLength = 0,
+    int numSeenTokens = 0,
     Tensor? attentionMask,
   }) {
     // Flash Attention 2 usually handles causal masking internally.
     // If attentionMask is not null (padding), we might need to return it.
     // If attentionMask is null and isCausal, we return null.
-    if (attentionMask == null && isCausal) {
+    if (attentionMask == null && isCausal && numSeenTokens == 0) {
       return null;
     }
 
@@ -720,7 +718,7 @@ class GPT2AttentionMethodFlashAttention2 extends GPT2AttentionMethodSDAP {
       qLen,
       dataType,
       device,
-      pastKeyValuesLength: pastKeyValuesLength,
+      numSeenTokens: numSeenTokens,
       attentionMask: attentionMask,
     );
   }
@@ -757,7 +755,7 @@ class GPT2AttentionFuncFlexAttention extends GPT2AttentionMethodSDAP {
     int qLen,
     DataType dataType,
     Device device, {
-    int pastKeyValuesLength = 0,
+    int numSeenTokens = 0,
     Tensor? attentionMask,
   }) {
     // FlexAttention uses BlockMask

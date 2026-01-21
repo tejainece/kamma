@@ -1,19 +1,16 @@
-import 'package:tensor/tensor.dart';
-import 'llama_config.dart';
-import 'llama_attention.dart';
-import 'llama_mlp.dart';
+import 'package:kamma/kamma.dart';
+
+import 'llama_rms_norm.dart';
 
 class LlamaDecoderLayer extends Module implements SimpleModule {
-  final LlamaConfig config;
   final int layerIdx;
 
   final LlamaAttention selfAttn;
   final LlamaMLP mlp;
-  final RMSNorm inputLayernorm;
-  final RMSNorm postAttentionLayernorm;
+  final LlamaRMSNorm inputLayernorm;
+  final LlamaRMSNorm postAttentionLayernorm;
 
   LlamaDecoderLayer(
-    this.config,
     this.layerIdx, {
     required this.selfAttn,
     required this.mlp,
@@ -21,77 +18,18 @@ class LlamaDecoderLayer extends Module implements SimpleModule {
     required this.postAttentionLayernorm,
   }) : super(name: 'layers.$layerIdx');
 
-  static LlamaDecoderLayer make(LlamaConfig config, int layerIdx) {
-    return LlamaDecoderLayer(
-      config,
-      layerIdx,
-      selfAttn: LlamaAttention.make(config, layerIdx: layerIdx),
-      mlp: LlamaMLP.make(config),
-      inputLayernorm: RMSNorm.make(
-        name: 'input_layernorm',
-        normalizedShape: [config.hiddenSize],
-        eps: config.rmsNormEps,
-      ),
-      postAttentionLayernorm: RMSNorm.make(
-        name: 'post_attention_layernorm',
-        normalizedShape: [config.hiddenSize],
-        eps: config.rmsNormEps,
-      ),
-    );
-  }
-
-  static Future<LlamaDecoderLayer> loadFromSafeTensor(
-    SafeTensorLoader loader,
-    LlamaConfig config,
-    int layerIdx, {
-    required String prefix,
-  }) async {
-    return LlamaDecoderLayer(
-      config,
-      layerIdx,
-      selfAttn: await LlamaAttention.loadFromSafeTensor(
-        loader,
-        config,
-        prefix: '${prefix}self_attn.',
-        layerIdx: layerIdx,
-      ),
-      mlp: await LlamaMLP.loadFromSafeTensor(
-        loader,
-        config,
-        prefix: '${prefix}mlp.',
-      ),
-      inputLayernorm: await RMSNorm.loadFromSafeTensor(
-        loader,
-        prefix: '${prefix}input_layernorm.',
-        name: 'input_layernorm',
-        normalizedShape: [config.hiddenSize],
-        eps: config.rmsNormEps,
-      ),
-      postAttentionLayernorm: await RMSNorm.loadFromSafeTensor(
-        loader,
-        prefix: '${prefix}post_attention_layernorm.',
-        name: 'post_attention_layernorm',
-        normalizedShape: [config.hiddenSize],
-        eps: config.rmsNormEps,
-      ),
-    );
-  }
-
   @override
   Tensor forward(
     Tensor embeddings, {
     required Context context,
     Tensor? attentionMask,
     Tensor? positionIds,
-    (Tensor, Tensor)? positionEmbeddings,
+    ({Tensor cos, Tensor sin})? positionEmbeddings,
     bool useCache = false,
   }) {
     context.onloadModule(this);
 
-    // Residual connection
     Tensor residual = embeddings;
-
-    // 1. Input Norm
     Tensor hiddenStates = inputLayernorm.forward(embeddings, context: context);
 
     // 2. Self Attention
@@ -147,4 +85,110 @@ class LlamaDecoderLayer extends Module implements SimpleModule {
 
   @override
   Map<String, dynamic> get meta => {'layerIdx': layerIdx};
+
+  static LlamaDecoderLayer make({
+    required int layerIdx,
+    required int hiddenSize,
+    required int intermediateSize,
+    required int numHeads,
+    required int numKeyValueHeads,
+    required int headDim,
+    required int maxPositionEmbeddings,
+    required double ropeTheta,
+    required double rmsNormEps,
+    required Activation activation,
+    required bool hasAttentionBias,
+    required double attentionDropoutProb,
+    required bool isCausal,
+    GPT2AttentionMethodType attentionMethod = GPT2AttentionMethodType.sdap,
+  }) {
+    return LlamaDecoderLayer(
+      layerIdx,
+      selfAttn: LlamaAttention.make(
+        name: 'self_attn',
+        layerIdx: layerIdx,
+        numHeads: numHeads,
+        embedDim: hiddenSize,
+        maxPositionEmbeddings: maxPositionEmbeddings,
+        ropeTheta: ropeTheta,
+        hasAttentionBias: hasAttentionBias,
+        numKeyValueHeads: numKeyValueHeads,
+        attentionDropoutProb: attentionDropoutProb,
+        isCausal: isCausal,
+        attentionMethod: attentionMethod,
+      ),
+      mlp: LlamaMLP.make(
+        embedDim: hiddenSize,
+        intermediateSize: intermediateSize,
+        activation: activation,
+        hasBias: false, // TODO Assuming default TODO check config.mlpBias usage
+      ),
+      inputLayernorm: LlamaRMSNorm.make(
+        name: 'input_layernorm',
+        dim: hiddenSize,
+        eps: rmsNormEps,
+      ),
+      postAttentionLayernorm: LlamaRMSNorm.make(
+        name: 'post_attention_layernorm',
+        dim: hiddenSize,
+        eps: rmsNormEps,
+      ),
+    );
+  }
+
+  static Future<LlamaDecoderLayer> loadFromSafeTensor(
+    SafeTensorLoader loader, {
+    required int layerIdx,
+    required String prefix,
+    // TODO cant we compute this from attention
+    required int embedDim,
+    required int numHeads,
+    required double attentionDropoutProb,
+    required int maxPositionEmbeddings,
+    required double ropeTheta,
+    required bool isCausal,
+    required double rmsNormEps,
+    required Activation activation,
+    GPT2AttentionMethodType attentionMethod = GPT2AttentionMethodType.sdap,
+  }) async {
+    final selfAttn = await LlamaAttention.loadFromSafeTensor(
+      loader,
+      prefix: '${prefix}self_attn.',
+      name: 'self_attn',
+      layerIdx: layerIdx,
+      numHeads: numHeads,
+      attentionDropoutProb: attentionDropoutProb,
+      maxPositionEmbeddings: maxPositionEmbeddings,
+      ropeTheta: ropeTheta,
+      isCausal: isCausal,
+      attentionMethod: attentionMethod,
+    );
+    return LlamaDecoderLayer(
+      layerIdx,
+      selfAttn: selfAttn,
+      mlp: await LlamaMLP.loadFromSafeTensor(
+        loader,
+        prefix: '${prefix}mlp.',
+        activation: activation,
+      ),
+      inputLayernorm: await LlamaRMSNorm.loadFromSafeTensor(
+        loader,
+        prefix: '${prefix}input_layernorm.',
+        name: 'input_layernorm',
+        normalizedShape: selfAttn.embedDim,
+        eps: rmsNormEps,
+      ),
+      postAttentionLayernorm: await LlamaRMSNorm.loadFromSafeTensor(
+        loader,
+        prefix: '${prefix}post_attention_layernorm.',
+        name: 'post_attention_layernorm',
+        normalizedShape: selfAttn.embedDim,
+        eps: rmsNormEps,
+      ),
+    );
+  }
+
+  void resetKeyValueCache() {
+    selfAttn.resetKeyValueCache();
+  }
 }

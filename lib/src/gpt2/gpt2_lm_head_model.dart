@@ -65,6 +65,8 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
     int topK = 0,
     double topP = 1.0,
   }) {
+    context.onloadModule(this);
+    resetKeyValueCache();
     Tensor currentInputIds = inputIds.to(device: context.device);
 
     Tensor nextInput = currentInputIds;
@@ -72,7 +74,6 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
     for (int i = 0; i < maxNewTokens; i++) {
       // Forward pass
       final logits = forward(nextInput, context: context);
-
       // Get logits for the last token
       // [batch_size, seq_len, vocab_size] -> [batch_size, vocab_size]
       Tensor nextTokenLogits = logits.select(1, logits.shape[1] - 1);
@@ -236,6 +237,7 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
   static GPT2LMHeadModel make({
     required GPT2Config config,
     bool isCrossAttention = false,
+    GPT2AttentionMethodType attentionMethod = .eager,
     required String name,
   }) {
     final activation = Activation.fromName(config.activationFunction);
@@ -261,6 +263,7 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
       mlpInnerDim: config.mlpInnerDim,
       maxPositionEmbeddings: config.maxPositionEmbeddings,
       activation: activation,
+      attentionMethod: attentionMethod,
     );
 
     final lmHead = LinearLayer.make(
@@ -297,6 +300,20 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
     bool isCrossAttention = false,
     String lmHeadName = 'lm_head',
     String transformerName = '',
+    GPT2AttentionMethodType attentionMethod = .eager,
+    // Tensor names
+    String wteName = 'wte',
+    String wpeName = 'wpe',
+    String layerNormName = 'ln_f',
+    String blockPrefix = 'h.',
+    String attentionName = 'attn',
+    String preLayerNormName = 'ln_1',
+    String postLayerNormName = 'ln_2',
+    String mlpName = 'mlp',
+    String qkvAttentionName = 'c_attn',
+    String attnOutputName = 'c_proj',
+    String cFcName = 'c_fc',
+    String cProjName = 'c_proj',
   }) async {
     final activation = Activation.fromName(config.activationFunction);
     if (activation == null) {
@@ -318,6 +335,19 @@ class GPT2LMHeadModel extends Module implements SimpleModule {
       maxPositionEmbeddings: config.maxPositionEmbeddings,
       activation: activation,
       isCrossAttention: isCrossAttention,
+      attentionMethod: attentionMethod,
+      wteName: wteName,
+      wpeName: wpeName,
+      layerNormName: layerNormName,
+      blockPrefix: blockPrefix,
+      attentionName: attentionName,
+      preLayerNormName: preLayerNormName,
+      postLayerNormName: postLayerNormName,
+      mlpName: mlpName,
+      qkvAttentionName: qkvAttentionName,
+      attnOutputName: attnOutputName,
+      cFcName: cFcName,
+      cProjName: cProjName,
     );
 
     LinearLayer lmHead;

@@ -1,55 +1,44 @@
-import 'package:kamma/src/common/rope/rope.dart';
 import 'package:tensor/tensor.dart';
+import 'dart:math' as math;
 
-class LlamaRotaryEmbedding extends Module {
+class GemmaRotaryEmbedding extends Module {
   final Tensor invFreq;
-  final double attentionScaling;
 
-  LlamaRotaryEmbedding({required this.invFreq, required this.attentionScaling})
-    : super(name: 'rotary_emb');
+  GemmaRotaryEmbedding({required this.invFreq}) : super(name: 'rotary_emb');
 
-  static LlamaRotaryEmbedding make({
-    required final RopeArgs ropeArgs,
+  static GemmaRotaryEmbedding make({
     required int dim,
-    required double base,
+    required double base, // rope_theta
     required int maxPositionEmbeddings,
   }) {
-    Tensor invFreq;
-    double attentionScaling;
+    // Gemma uses default RoPE logic usually.
+    // LlamaRotaryEmbedding uses RopeArgs which calculates invFreq.
+    // We can reuse that or implement simple invFreq calculation.
+    // inv_freq = 1.0 / (base ** (arange(0, dim, 2).float() / dim))
 
-    if (ropeArgs is DefaultRopeArgs) {
-      (:invFreq, :attentionScaling) = ropeArgs.compute(dim, base);
-    } else if (ropeArgs is Llama3RopeArgs) {
-      (:invFreq, :attentionScaling) = ropeArgs.compute(
-        dim,
-        base,
-        maxPositionEmbeddings,
-      );
-    } else {
-      throw UnimplementedError(
-        'Unsupported rope type: ${ropeArgs.runtimeType}',
-      );
-    }
-    return LlamaRotaryEmbedding(
-      invFreq: invFreq,
-      attentionScaling: attentionScaling,
-    );
+    // Using DefaultRopeArgs logic for consistency if possible,
+    // but Gemma doesn't usually use the complex scaling of Llama 3.
+    // But let's stick to manual calculation to ensure Gemma correctness without dependency on Llama specific args if possible.
+
+    // Actually, Kamma's RopeArgs might be useful if we want to support scaling later.
+    // But specifically for Gemma 1, we can just compute invFreq.
+
+    final invFreq =
+        Tensor.arange(0, dim, step: 2, dataType: DataType.float32) / dim;
+    // base^(-invFreq) = exp(-invFreq * log(base))
+    final invFreqComputed = (invFreq * -math.log(base)).exp();
+
+    return GemmaRotaryEmbedding(invFreq: invFreqComputed);
   }
 
   /// Generates the rotary positional embeddings (cos, sin) for the given position IDs.
-  ///
-  /// RoPE encodes position by rotating query and key vectors in a high-dimensional space
-  /// rather than adding a separate position vector. This method calculates the rotation angles (frequencies)
-  /// for each token position.
-  ///
-  /// By applying these rotations, the dot product between a query at position `m` and a key at position `n`
-  /// becomes dependent only on their relative distance `m - n`, allowing the model to generalize better
-  /// to sequence lengths unseen during training.
   ({Tensor cos, Tensor sin}) forward(
     Tensor positionIds, {
     required Context context,
   }) {
     context.onloadModule(this);
+    // Ensure invFreq is on device
+    invFreq.to_(device: context.device);
     positionIds.to_(device: context.device);
 
     // positionIds is (B, S). -> (B, 1, S)
@@ -60,15 +49,12 @@ class LlamaRotaryEmbedding extends Module {
     // invFreq is (D/2). Unsqueeze -> (1, D/2, 1).
     final invFreqExpanded = invFreq.unsqueeze(0).unsqueeze(-1);
 
-    // (1, D/2, 1) @ (B, 1, S) -> Broadcasting invFreq to (B, D/2, 1)
-    // Matmul: (B, D/2, 1) * (B, 1, S) -> (B, D/2, S)
-
     // freqs = (inv_freq_expanded @ position_ids_expanded).transpose(1, 2)
     final freqs = invFreqExpanded.matmul(posIdsFloat).transpose(1, 2);
 
     final emb = Tensor.cat([freqs, freqs], dim: -1);
-    final cos = emb.cos() * attentionScaling;
-    final sin = emb.sin() * attentionScaling;
+    final cos = emb.cos();
+    final sin = emb.sin();
 
     return (cos: cos, sin: sin);
   }
@@ -80,6 +66,16 @@ class LlamaRotaryEmbedding extends Module {
     Tensor sin, {
     int unsqueezeDim = 1,
   }) {
+    // q, k: [batch, heads, seq_len, head_dim]
+    // cos, sin: [batch, seq_len, head_dim] (usually after broadcasting or repeat)
+
+    // We need to match dimensions.
+    // cos/sin from forward are [batch, 1, seq_len, head_dim]?
+    // No, forward returns [batch, head_dim/2, seq_len].transpose -> [batch, seq_len, head_dim]
+
+    // So cos/sin are [batch, seq_len, head_dim].
+    // We unsqeeze at dim 1 to get [batch, 1, seq_len, head_dim] to broadcast over heads.
+
     final cosUnsq = cos.unsqueeze(unsqueezeDim);
     final sinUnsq = sin.unsqueeze(unsqueezeDim);
 
@@ -108,9 +104,7 @@ class LlamaRotaryEmbedding extends Module {
   final Iterable<Tensor> parameters = [];
 
   @override
-  void resetParameters() {
-    // TODO: implement resetParameters
-  }
+  void resetParameters() {}
 
   @override
   final Iterable<Module> submodules = [];

@@ -38,7 +38,6 @@ class GPT2Block extends Module implements SimpleModule {
     final outputEmbeddings = attention.forward(
       embeddings,
       attentionMask: attentionMask,
-      // TODO cache position
       headMask: headMask,
       encoderHiddenStates: encoderHiddenStates,
       outputAttentions: outputSelfAttentions,
@@ -118,6 +117,7 @@ class GPT2Block extends Module implements SimpleModule {
     required bool isCrossAttention,
     required int maxPositionEmbeddings,
     required Activation activation,
+    GPT2AttentionMethodType attentionMethod = .eager,
   }) {
     final ln1 = LayerNorm.make(
       name: 'ln_1',
@@ -135,6 +135,7 @@ class GPT2Block extends Module implements SimpleModule {
       isCrossAttention: false,
       scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
       maxPositionEmbeddings: maxPositionEmbeddings,
+      attentionMethod: attentionMethod,
     );
 
     final ln2 = LayerNorm.make(
@@ -164,6 +165,7 @@ class GPT2Block extends Module implements SimpleModule {
         numHeads: numHeads,
         scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
         maxPositionEmbeddings: maxPositionEmbeddings,
+        attentionMethod: attentionMethod,
       );
       lnCrossAttention = LayerNorm(
         normalizedShape: [embedDim],
@@ -201,6 +203,12 @@ class GPT2Block extends Module implements SimpleModule {
     required int maxPositionEmbeddings,
     required Activation activation,
     required int embedDim,
+    GPT2AttentionMethodType attentionMethod = .eager,
+    // Internal names
+    String qkvAttentionName = 'c_attn',
+    String outputProjectionName = 'c_proj',
+    String cFcName = 'c_fc',
+    String cProjName = 'c_proj',
   }) async {
     final attn = await GPT2Attention.loadFromSafeTensor(
       loader,
@@ -213,6 +221,9 @@ class GPT2Block extends Module implements SimpleModule {
       layerIdx: layerIdx,
       scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
       maxPositionEmbeddings: maxPositionEmbeddings,
+      attentionMethod: attentionMethod,
+      qkvAttentionName: qkvAttentionName,
+      outputProjectionName: outputProjectionName,
     );
     // final embedDim = attn.embedDim;
     final ln1 = await LayerNorm.loadFromSafeTensor(
@@ -235,6 +246,8 @@ class GPT2Block extends Module implements SimpleModule {
       name: mlpName,
       activation: activation,
       residualDropoutProbability: residualDropoutProbability,
+      cFcName: cFcName,
+      cProjName: cProjName,
     );
 
     GPT2Attention? crossAttention;
@@ -251,6 +264,7 @@ class GPT2Block extends Module implements SimpleModule {
         scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
         maxPositionEmbeddings: maxPositionEmbeddings,
         isCrossAttention: true,
+        attentionMethod: attentionMethod,
       );
     }
 

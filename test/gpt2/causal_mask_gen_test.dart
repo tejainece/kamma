@@ -83,7 +83,7 @@ void main() {
           s,
           expectedMask.dataType,
           device,
-          pastKeyValuesLength: p,
+          numSeenTokens: p,
           attentionMask: attentionMask,
         );
 

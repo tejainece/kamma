@@ -6,7 +6,7 @@ import 'package:test/test.dart';
 void main() {
   test('Verify GPT-OSS Rotary Embedding against Python reference', () async {
     final path =
-        '/home/tejag/projects/dart/ai/tensor/test_gen/gpt_oss/gpt_oss_rotary_embedding.safetensors';
+        './testdata/test_data/gpt_oss/gpt_oss_rotary_embedding.safetensors';
     final file = File(path);
     if (!await file.exists()) {
       fail(

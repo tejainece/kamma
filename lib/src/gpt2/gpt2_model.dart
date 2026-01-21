@@ -81,13 +81,14 @@ class GPT2Model extends Module {
     final seqLength = inputIds?.shape[1] ?? inputsEmbeds!.shape[1];
 
     // Create causal mask
+    final pastKeyValuesLength = blocks.first.attention.keyValueCache.seqLength;
     Tensor? causalMask = createCausalMask(
       batchSize,
       seqLength,
       inputsEmbeds.dataType,
       context.device,
       method: blocks.first.attention.attentionMethod,
-      pastKeyValuesLength: 0, // TODO support past key values
+      pastKeyValuesLength: pastKeyValuesLength,
       attentionMask: attentionMask,
     );
 
@@ -178,6 +179,7 @@ class GPT2Model extends Module {
     required int maxPositionEmbeddings,
     required int? mlpInnerDim,
     required Activation activation,
+    GPT2AttentionMethodType attentionMethod = .eager,
     String wteName = 'wte',
     String wpeName = 'wpe',
     String lnFName = 'ln_f',
@@ -213,6 +215,7 @@ class GPT2Model extends Module {
           maxPositionEmbeddings: maxPositionEmbeddings,
           mlpInnerDim: mlpInnerDim,
           activation: activation,
+          attentionMethod: attentionMethod,
         ),
       );
     }
@@ -240,6 +243,7 @@ class GPT2Model extends Module {
     String wteName = 'wte',
     String wpeName = 'wpe',
     String layerNormName = 'ln_f',
+    String blockPrefix = 'h.', // Use 'blk.' for GGUF
     required double embedDropoutProbability,
     required double attentionDropoutProbability,
     required double residualDropoutProbability,
@@ -249,6 +253,16 @@ class GPT2Model extends Module {
     required int maxPositionEmbeddings,
     required Activation activation,
     required bool isCrossAttention,
+    GPT2AttentionMethodType attentionMethod = .eager,
+    // Block internal names
+    String attentionName = 'attn',
+    String preLayerNormName = 'ln_1',
+    String postLayerNormName = 'ln_2',
+    String mlpName = 'mlp',
+    String qkvAttentionName = 'c_attn',
+    String attnOutputName = 'c_proj',
+    String cFcName = 'c_fc',
+    String cProjName = 'c_proj',
   }) async {
     final wte = await EmbeddingLayer.loadFromSafeTensor(
       loader,
@@ -264,11 +278,11 @@ class GPT2Model extends Module {
 
     final blocks = <GPT2Block>[];
     for (int i = 0; true; i++) {
-      final path = '${prefix}h.$i.';
+      final path = '$prefix$blockPrefix$i.';
       if (!loader.hasTensorWithPrefix(path)) break;
       final block = await GPT2Block.loadFromSafeTensor(
         loader,
-        name: 'h.$i',
+        name: '$blockPrefix$i',
         prefix: path,
         layerNormEpsilon: layerNormEpsilon,
         attentionDropoutProbability: attentionDropoutProbability,
@@ -280,6 +294,15 @@ class GPT2Model extends Module {
         maxPositionEmbeddings: maxPositionEmbeddings,
         activation: activation,
         embedDim: embedDim,
+        attentionMethod: attentionMethod,
+        attentionName: attentionName,
+        preLayerNormName: preLayerNormName,
+        postLayerNormName: postLayerNormName,
+        mlpName: mlpName,
+        qkvAttentionName: qkvAttentionName,
+        outputProjectionName: attnOutputName,
+        cFcName: cFcName,
+        cProjName: cProjName,
       );
       blocks.add(block);
     }

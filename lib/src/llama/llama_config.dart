@@ -46,8 +46,8 @@ class LlamaConfig {
     this.attentionDropout = 0.0,
     this.mlpBias = false,
     int? headDim,
-  }) : this.numKeyValueHeads = numKeyValueHeads ?? numAttentionHeads,
-       this.headDim = headDim ?? (hiddenSize ~/ numAttentionHeads);
+  }) : numKeyValueHeads = numKeyValueHeads ?? numAttentionHeads,
+       headDim = headDim ?? (hiddenSize ~/ numAttentionHeads);
 
   factory LlamaConfig.fromJson(Map<String, dynamic> json) {
     return LlamaConfig(

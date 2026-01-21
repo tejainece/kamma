@@ -1,8 +1,8 @@
 {
     "editor.suggest.insertMode": "insert",
-    "python.defaultInterpreterPath": "${workspaceFolder}/../testdata/test_gen/venv/bin/python",
+    "python.defaultInterpreterPath": "${workspaceFolder}/testdata/venv/bin/python",
     "basedpyright.analysis.extraPaths": [
-        "${workspaceFolder}/../testdata/test_gen/venv/lib/python3.12/site-packages"
+        "${workspaceFolder}/testdata/venv/lib/python3.12/site-packages"
     ],
     "basedpyright.analysis.autoImportCompletions": true,
     "basedpyright.analysis.typeCheckingMode": "basic",

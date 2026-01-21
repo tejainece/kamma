@@ -40,7 +40,6 @@ class GPT2Attention extends Module {
     }
 
     double scaleFactor = 1.0 / sqrt(headDim);
-
     if (scaleAttnByInverseLayerIdx) {
       scaleFactor /= layerIdx + 1;
     }
@@ -142,6 +141,7 @@ class GPT2Attention extends Module {
 
     if (!context.isTraining) {
       // TODO implement cache_position (updating specific position in cache instead of at the end)
+      // print('Adding to cache: key ${key.shape}, value ${value.shape}');
       keyValueCache.update(newKey: key, newValue: value);
       key = keyValueCache.key;
       value = keyValueCache.value;
@@ -212,7 +212,7 @@ class GPT2Attention extends Module {
     required int numHeads,
     required bool scaleAttnByInverseLayerIdx,
     required int maxPositionEmbeddings,
-    GPT2AttentionMethodType attnFuncType = .eager,
+    GPT2AttentionMethodType attentionMethod = .eager,
     String qkvAttentionName = 'c_attn',
     String outputProjectionName = 'c_proj',
   }) {
@@ -242,7 +242,7 @@ class GPT2Attention extends Module {
       numHeads: numHeads,
       scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
       maxPositionEmbeddings: maxPositionEmbeddings,
-      attentionMethod: attnFuncType,
+      attentionMethod: attentionMethod,
     );
   }
 
@@ -258,7 +258,7 @@ class GPT2Attention extends Module {
     String qkvAttentionName = 'c_attn',
     String outputProjectionName = 'c_proj',
     required bool scaleAttnByInverseLayerIdx,
-    GPT2AttentionMethodType attnFuncType = .eager,
+    GPT2AttentionMethodType attentionMethod = .eager,
     required int maxPositionEmbeddings,
   }) async {
     final qkvAttention = await LinearTransposed.loadFromSafeTensor(
@@ -285,7 +285,7 @@ class GPT2Attention extends Module {
       residualDropout: residDropout,
       numHeads: numHeads,
       scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
-      attentionMethod: attnFuncType,
+      attentionMethod: attentionMethod,
       maxPositionEmbeddings: maxPositionEmbeddings,
     );
   }

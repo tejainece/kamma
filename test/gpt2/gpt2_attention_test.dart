@@ -41,13 +41,13 @@ class Test {
       device: device,
     );
 
-    final numHeads = int.parse(loader.header.metadata['$name.numHeads']!);
-    final layerIdx = int.parse(loader.header.metadata['$name.layerIdx']!);
+    final numHeads = int.parse(loader.metadata['$name.numHeads']!);
+    final layerIdx = int.parse(loader.metadata['$name.layerIdx']!);
     final maxPositionEmbeddings = int.parse(
-      loader.header.metadata['$name.maxPositionEmbeddings']!,
+      loader.metadata['$name.maxPositionEmbeddings']!,
     );
     final scaleAttnByInverseLayerIdx =
-        loader.header.metadata['$name.scaleAttnByInverseLayerIdx'] == 'true';
+        loader.metadata['$name.scaleAttnByInverseLayerIdx'] == 'true';
 
     final attention = await GPT2Attention.loadFromSafeTensor(
       loader,
@@ -57,7 +57,7 @@ class Test {
       numHeads: numHeads,
       scaleAttnByInverseLayerIdx: scaleAttnByInverseLayerIdx,
       maxPositionEmbeddings: maxPositionEmbeddings,
-      attnFuncType: GPT2AttentionMethodType.eager,
+      attentionMethod: GPT2AttentionMethodType.eager,
       isCrossAttention: false,
       attentionDropoutProbability: 0,
       residualDropoutProbability: 0,
